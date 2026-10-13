@@ -1,0 +1,42 @@
+{
+  "name": "@bid/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "db:init": "node dist/commands/cli.js db:init",
+    "db:verify": "node dist/commands/cli.js db:verify",
+    "db:reset": "node dist/commands/cli.js db:reset",
+    "model:probe": "node dist/commands/cli.js model:probe",
+    "users:bootstrap": "node dist/commands/cli.js users:bootstrap",
+    "data:seed": "node dist/commands/cli.js data:seed",
+    "data:generate": "node dist/commands/cli.js data:generate",
+    "data:reconcile": "node dist/commands/cli.js data:reconcile"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "3.972.0",
+    "@aws-sdk/lib-dynamodb": "3.972.0",
+    "@bid/shared": "workspace:*",
+    "@langfuse/core": "5.13.1",
+    "@langfuse/openai": "5.13.1",
+    "@langfuse/otel": "5.13.1",
+    "@langfuse/tracing": "5.13.1",
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/api-logs": "0.223.0",
+    "@opentelemetry/context-async-hooks": "2.12.0",
+    "@opentelemetry/core": "2.12.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.223.0",
+    "@opentelemetry/otlp-exporter-base": "0.223.0",
+    "@opentelemetry/sdk-node": "0.223.0",
+    "@opentelemetry/sdk-trace-base": "2.12.0",
+    "fastify": "5.12.5",
+    "openai": "7.32.0",
+    "zod": "4.6.7"
+  }
+}

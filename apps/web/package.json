@@ -1,0 +1,21 @@
+{
+  "name": "@bid/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "@bid/shared": "workspace:*",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "vite": "7.3.7",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

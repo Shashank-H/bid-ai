@@ -1,0 +1,100 @@
+name: bid-intelligence
+
+x-database-environment: &database-environment
+  DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+  TABLE_PREFIX: ${TABLE_PREFIX:-bid}
+  AWS_REGION: ${AWS_REGION:-local}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-local}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local}
+
+services:
+  dynamodb:
+    build:
+      context: .
+      dockerfile: docker/dynamodb.Dockerfile
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/home/dynamodblocal/data"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    healthcheck:
+      # DynamoDB returns HTTP 400 for an unsigned request, which still proves HTTP readiness.
+      test: ["CMD-SHELL", "curl --silent --output /dev/null --max-time 3 http://127.0.0.1:8000/"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  db-init:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: runtime
+    command: ["node", "dist/commands/cli.js", "db:init"]
+    environment: *database-environment
+    depends_on:
+      dynamodb:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: runtime
+    environment:
+      <<: *database-environment
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NODE_ENV: production
+      REPOSITORY_MODE: ${REPOSITORY_MODE:-fixture}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-bid_session}
+      SESSION_LIFETIME_SECONDS: ${SESSION_LIFETIME_SECONDS:-28800}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
+      LLM_PROBE_MAX_TOKENS: ${LLM_PROBE_MAX_TOKENS:-}
+      LLM_PROBE_MAX_OUTPUT_BYTES: ${LLM_PROBE_MAX_OUTPUT_BYTES:-}
+      LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-false}
+      LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_TRACING_ENVIRONMENT: ${LANGFUSE_TRACING_ENVIRONMENT:-development}
+      LANGFUSE_TIMEOUT_MS: ${LANGFUSE_TIMEOUT_MS:-2000}
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+    depends_on:
+      dynamodb:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      target: runtime
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
+      interval: 5s
+      timeout: 4s
+      retries: 6
+    restart: unless-stopped
+
+volumes:
+  dynamodb-data:

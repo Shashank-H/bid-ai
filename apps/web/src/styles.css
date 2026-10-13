@@ -1,0 +1,38 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #172b3b;
+  background: #f4f6f8;
+  font-synthesis: none;
+  line-height: 1.6;
+  --accent: #16324f;
+  --muted: #526171;
+  --border: #c4cdd5;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+
+.foundation { max-width: 48rem; margin: 0 auto; padding: 4rem 1.5rem; }
+h1 { font-size: clamp(2rem, 6vw, 2.75rem); line-height: 1.2; margin: .5rem 0 1rem; }
+h2 { font-size: 1.25rem; line-height: 1.3; margin-top: 0; }
+.eyebrow { color: var(--muted); font-size: .875rem; font-weight: 650; margin: 0; }
+.intro { max-width: 40rem; }
+
+.status-panel { background: #fff; border: 1px solid var(--border); border-radius: .75rem; padding: 1.5rem; margin: 2rem 0; }
+.status { display: grid; gap: .4rem; }
+.status-label { font-weight: 700; }
+.status-ready .status-label { color: #17623a; }
+.status-unavailable .status-label { color: #9a2e1d; }
+.hint, .scope, .last-check { color: var(--muted); font-size: .9rem; }
+
+.actions { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-top: 1.25rem; }
+button { font: inherit; font-weight: 650; color: #fff; background: var(--accent); border: 2px solid var(--accent); border-radius: .4rem; padding: .55rem .9rem; cursor: pointer; }
+button:hover:not(:disabled) { background: #245176; border-color: #245176; }
+button:active:not(:disabled) { background: #0b2137; }
+button:focus-visible { outline: 3px solid #267cc1; outline-offset: 3px; }
+button:disabled { cursor: wait; color: #526171; background: #e3e8ed; border-color: #c4cdd5; }
+.last-check { margin: 0; }
+
+@media (max-width: 35rem) { .foundation { padding: 2rem 1rem; } .status-panel { padding: 1rem; } }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }

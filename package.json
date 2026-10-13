@@ -1,0 +1,30 @@
+{
+  "name": "bid-intelligence",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "pnpm --filter @bid/shared build && pnpm --filter @bid/api build && pnpm --filter @bid/web build",
+    "typecheck": "pnpm --filter @bid/shared typecheck && pnpm --filter @bid/api typecheck && pnpm --filter @bid/web typecheck",
+    "test": "vitest run --config vitest.config.ts",
+    "test:integration": "pnpm build && vitest run --config vitest.integration.config.ts",
+    "test:e2e": "playwright test",
+    "db:init": "pnpm --filter @bid/api db:init",
+    "db:verify": "pnpm --filter @bid/api db:verify",
+    "db:reset": "pnpm --filter @bid/api db:reset",
+    "model:probe": "pnpm --filter @bid/api model:probe",
+    "users:bootstrap": "pnpm --filter @bid/api users:bootstrap",
+    "data:seed": "pnpm --filter @bid/api data:seed",
+    "data:generate": "pnpm --filter @bid/api data:generate",
+    "data:reconcile": "pnpm --filter @bid/api data:reconcile"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vitest": "5.0.4",
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.19.2"
+  }
+}

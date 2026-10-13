@@ -1,27 +1,39 @@
 # Bid Intelligence
 
-A project exploring an AI assistant for investigating programmatic advertising auction performance. The goal is to help publishers understand revenue and bidder trends, connect changes in auction configuration to performance, and propose evidence-backed optimizations. Any configuration change should require explicit publisher approval.
+A publisher ad-ops assistant for investigating auction performance with evidence-backed findings. Synthetic earnings are **estimated revenue**; configuration changes require explicit publisher approval.
 
-## Project status
+## Current capabilities
 
-This repository currently contains the exercise brief and requirements in [`docs/`](docs/). The application and supporting infrastructure have not yet been implemented.
+The local foundation is implemented: a React status page, Fastify health/readiness API, persistent DynamoDB Local with repeat-safe empty-table initialization, shared TypeScript contracts, and a server-only model compatibility probe with optional Langfuse tracing. Login, chat, datasets and configuration changes are not implemented yet. The configured local model passed the live streaming/tool-call probe; [tracing verification](docs/architecture-and-implementation/TRACING-VERIFICATION.md) records the audited observations and runtime requirements.
 
-## Planned capabilities
+Three pnpm workspaces: `apps/web`, `apps/api` (including domain/tools/database/commands), and `packages/shared` (browser-safe contracts). Docker Compose runs `web`, `api`, `dynamodb`, and a one-shot `db-init` job. No cloud resources or model hosting are required.
 
-- Capture and analyze Prebid auction events and estimated revenue.
-- Investigate publisher-scoped performance using metrics, bidder comparisons, and configuration history.
-- Generate reproducible synthetic publisher data with documented scenarios for development and testing.
-- Explain findings with supporting evidence and distinguish correlation from causation.
-- Present proposed configuration changes for approval rather than applying them automatically.
+## Run
 
-Synthetic revenue and demo data should be clearly identified as estimates, not actual paid revenue.
+Requires Docker with Compose; no host Node/pnpm installation needed.
+
+```sh
+# Initial setup only: do not overwrite an existing private .env.
+cp .env.example .env
+# Keep .env private; model settings may remain blank for foundation startup.
+docker compose config --quiet
+docker compose up --build -d --wait
+```
+
+Open [localhost:8080](http://localhost:8080). Web/API host ports bind to loopback and can be changed in `.env`; DynamoDB is available at [localhost:8000](http://localhost:8000), also loopback-only. Ordinary startup does not load data or contact a model.
+
+## Check
+
+```sh
+docker compose -f compose.yaml -f compose.test.yaml build api web
+docker compose -f compose.yaml -f compose.test.yaml run --rm --no-deps api sh -lc 'pnpm build && pnpm typecheck && pnpm test && pnpm test:integration'
+docker compose -f compose.yaml -f compose.test.yaml run --rm --no-deps web pnpm test:e2e
+```
+
+See the [local runbook](docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md) for database checks, persistence, model settings, diagnostics and explicitly destructive resets. [Langfuse tracing](docs/architecture-and-implementation/TRACING.md) documents opt-in configuration, privacy controls and live trace verification.
 
 ## Documentation
 
-- [`docs/Full-Coding-Task.md`](docs/Full-Coding-Task.md) — exercise brief and implementation directions.
-- [`docs/Full-Requirements.md`](docs/Full-Requirements.md) — synthetic data, investigation scenarios, and acceptance criteria.
-- [`docs/JD.md`](docs/JD.md) — role and context for the exercise.
-
-## Development
-
-There is no application setup or test command yet. Add implementation-specific setup and verification instructions here as the project takes shape.
+- [Implementation roadmap](docs/architecture-and-implementation/IMPLEMENTATION-ROADMAP.md)
+- [Requirements](docs/requirements/Full-Requirements.md) · [Exercise brief](docs/architecture-and-implementation/Full-Coding-Task.md)
+- [Foundation plan](docs/requirements/phase%200/PLAN.md) · [Initial foundation verification](docs/requirements/phase%200/VERIFICATION.md)

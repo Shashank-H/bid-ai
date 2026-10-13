@@ -1,0 +1,22 @@
+# Use only for one-off commands against an already-running base Compose environment.
+# docker compose -f compose.yaml -f compose.test.yaml build api web
+# docker compose -f compose.yaml -f compose.test.yaml run --rm --no-deps api pnpm test
+services:
+  api:
+    image: bid-intelligence-api-test:phase0
+    build:
+      target: test
+    working_dir: /workspace
+    command: ["pnpm", "test"]
+    healthcheck:
+      disable: true
+  web:
+    image: bid-intelligence-web-test:phase0
+    build:
+      target: test
+    working_dir: /workspace
+    command: ["pnpm", "test:e2e"]
+    environment:
+      WEB_BASE_URL: http://web
+    healthcheck:
+      disable: true
