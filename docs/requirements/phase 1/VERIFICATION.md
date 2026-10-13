@@ -56,7 +56,19 @@ At the user's explicit request, normal `bid-*` resources—not test resources—
 - Demo-only generated credentials are intentionally saved in [DEMO-ACCOUNTS.md](DEMO-ACCOUNTS.md). Only missing/blank signing/demo-password settings were added to gitignored `.env`; existing nonblank settings were preserved. No real signing/model/API/database secret was copied into documentation.
 - Tiny aggregate observations remain checked-in fixtures, not a full historical DynamoDB seed. A saved demo.a smoke question confirms a visible missing-model-settings error.
 
-To investigate with the real model, privately complete `LLM_BASE_URL`, `LLM_MODEL` and `LLM_API_KEY`, using a container-reachable URL. An explicitly unauthenticated endpoint may permit a nonempty local placeholder key. Recreate API/web after settings change; do not paste real keys into chat or credential documentation.
+The earlier missing-model setup limitation is superseded by the Ollama defaults and real-agent check below. Local Ollama needs no secret API key. Explicit alternate endpoints remain configurable; do not paste real provider keys into credential documentation.
+
+## Ollama demo-default follow-up
+
+- Missing/blank model settings now default to local Ollama `qwen3.5:9b` and non-secret SDK key `ollama`; missing/blank auth/demo-password settings use explicit public demo defaults. Existing nonblank overrides remain honored.
+- This machine uses **Docker Desktop**, not native Linux Docker. API → `host.docker.internal:11434/api/tags` returned HTTP 200 and the installed model. No custom proxy is needed; an initially attempted proxy was removed after verifying the built-in bridge.
+- Native `think:false` returned OK after ~67 seconds of cold loading; warm OpenAI-compatible completion returned OK in ~1 second. Product requests use supported `max_tokens` and generic configurable `reasoning_effort: none` / `temperature: 0` defaults; no model-specific branches or custom tool parser.
+- Build/typecheck and all **56 regression tests** passed with the default behavior changes.
+- Initial live attempts exposed intermittent provider tool-call formatting errors, stale inherited shell model settings overriding `.env`, and unnecessarily strict citation formatting. Compose now takes model overrides directly from its optional `.env` service file, so host `localhost` variables do not override Docker addressing.
+- Citation handling remains provider-neutral: observations require known evidence IDs (single or comma-separated bracketed references); labelled hypotheses/recommendations need not carry artificial citations. Every cited ID must still exist. The model receives explicit valid IDs and date-only tool guidance, without provider-specific parsing or retries.
+- **Real end-to-end PASS:** conversation `504966a0-a2a4-41d1-a7aa-63f930415dff` completed in **31 seconds** through `http://localhost:8080`, actual Ollama/OpenAI SDK/LangGraph and `compare_periods`. Returned $63.00 → $50.40 (-20%), fill 60% → 45%, CPM $1.50 → $1.60 with actual citations; GET reload showed `status: completed` and retained answer/evidence.
+- Build/typecheck, **56 regression and 15 integration tests** passed after provider-neutral settings changes; focused checks cover hypotheses without forced citations, grouped IDs, and rejection of unknown/missing observation IDs.
+- Model quality is not guaranteed: the successful question also requested configuration history, but the model chose only comparison and recommended checking history. Earlier live runs executed both comparison/history tools before citation rejection. Actual tool choice is model-driven, not a hidden deterministic script. Cold load is slow (~55–67 seconds); a native operator warmup retained the model for one hour during verification.
 
 ## Known limits
 

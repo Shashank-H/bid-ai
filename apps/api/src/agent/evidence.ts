@@ -3,6 +3,11 @@ import { HttpError } from '../errors.js';
 
 export const INSUFFICIENT_EVIDENCE = 'Insufficient evidence: No authorized observations were retrieved for this investigation.';
 
+function citationIds(text: string): string[] {
+  return [...text.matchAll(/\[([A-Za-z0-9._:,\s-]+)\]/g)]
+    .flatMap((match) => match[1]!.split(',').map((id) => id.trim()));
+}
+
 export function validateAnswer(state: State): void {
   const ids = new Set(state.evidence.map((entry) => entry.evidenceId));
   const text = state.answer.trim();
@@ -12,7 +17,7 @@ export function validateAnswer(state: State): void {
     return;
   }
 
-  const citations = [...text.matchAll(/\[([A-Za-z0-9._:-]+)\]/g)].map((match) => match[1]!);
+  const citations = citationIds(text);
   if (!citations.length || citations.some((id) => !ids.has(id))) {
     throw new HttpError(502, 'EVIDENCE_INVALID', 'The answer contains missing or unknown evidence references.');
   }
@@ -25,13 +30,11 @@ export function validateAnswer(state: State): void {
     throw new HttpError(502, 'EVIDENCE_INVALID', 'The answer must distinguish observations, hypotheses and recommendations.');
   }
 
-  for (let index = 0; index < sections.length; index++) {
-    const start = sections[index]!.index! + sections[index]![0].length;
-    const end = sections[index + 1]?.index ?? plain.length;
-    const sectionCitations = [...plain.slice(start, end).matchAll(/\[([A-Za-z0-9._:-]+)\]/g)];
+  const start = sections[0]!.index! + sections[0]![0].length;
+  const end = sections[1]!.index!;
+  const observationCitations = citationIds(plain.slice(start, end));
 
-    if (!sectionCitations.some((match) => ids.has(match[1]!))) {
-      throw new HttpError(502, 'EVIDENCE_INVALID', 'An answer section has no supporting evidence.');
-    }
+  if (!observationCitations.some((id) => ids.has(id))) {
+    throw new HttpError(502, 'EVIDENCE_INVALID', 'The observations have no supporting evidence.');
   }
 }

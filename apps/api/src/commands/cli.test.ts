@@ -36,16 +36,16 @@ it('rejects destructive or invalid configuration before any database request', a
   expect(result.text).not.toContain('sentinel');
 });
 
-it('refuses user bootstrap without private passwords and never reports placeholder success', async () => {
-  const result = await call(['users:bootstrap']);
+it('refuses explicitly invalid demo passwords before accessing the database', async () => {
+  const result = await call(['users:bootstrap'], { DEMO_PASSWORD_A: 'short' });
 
   expect(result.code).toBe(1);
   expect(result.text).not.toContain('NOT_IMPLEMENTED');
   expect(result.text).not.toContain('DEMO_PASSWORD');
 });
 
-it('requires private model settings only for the explicit probe command', async () => {
-  const result = await call(['model:probe']);
+it('rejects an explicitly invalid model endpoint before probing', async () => {
+  const result = await call(['model:probe'], { LLM_BASE_URL: 'not-an-endpoint' });
 
   expect(result.code).toBe(1);
   expect(result.text).toContain('INVALID_CONFIGURATION');

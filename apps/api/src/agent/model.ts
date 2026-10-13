@@ -20,7 +20,15 @@ export function modelRunner(env: NodeJS.ProcessEnv, tracing: TracingRuntime): Mo
   return async (state, signal, emit) => {
     const settings = readModelSettings(env);
     const agent = readAgentSettings(env);
-    if (Buffer.byteLength(JSON.stringify(state.messages)) > 131_072) {
+    const messages = state.evidence.length ? [...state.messages, {
+      role: 'system' as const,
+      content: `First obtain all tool data requested by the user, including configuration history when requested. This note is not an instruction to stop using tools.
+For your final answer, the only allowed evidence IDs are: ${JSON.stringify(state.evidence.map((item) => item.evidenceId))}.
+Use the sections Observation:, Hypothesis:, Recommendation:. Cite your observations with exact IDs in square brackets, for example [${state.evidence[0]!.evidenceId}]. Label hypotheses as uncertain and recommendations as suggestions; these do not require forced citations.
+Copy IDs verbatim. Do not add "evidenceId:" inside brackets, shorten an ID, or invent a date-range citation. Reusing a relevant ID across sections is allowed.`,
+    }] : state.messages;
+
+    if (Buffer.byteLength(JSON.stringify(messages)) > 131_072) {
       throw new HttpError(429, 'BUDGET_EXCEEDED', 'The model context byte limit was reached.');
     }
     const client = new OpenAI({ baseURL: settings.baseURL, apiKey: settings.apiKey, maxRetries: 0,
@@ -29,8 +37,10 @@ export function modelRunner(env: NodeJS.ProcessEnv, tracing: TracingRuntime): Mo
     try {
       return await tracing.generation('investigation-model', client, async (observed) => {
         const stream = await observed.chat.completions.create({ model: settings.model, stream: true,
-          stream_options: { include_usage: true }, messages: state.messages, tools: modelTools,
-          max_completion_tokens: agent.maxCompletionTokens }, { signal });
+          stream_options: { include_usage: true }, messages, tools: modelTools,
+          max_tokens: agent.maxCompletionTokens,
+          ...(settings.reasoningEffort === undefined ? {} : { reasoning_effort: settings.reasoningEffort }),
+          ...(settings.temperature === undefined ? {} : { temperature: settings.temperature }) }, { signal });
         const calls = new Map<number, ToolCall>();
         const filter = new VisibleText();
         let text = '';

@@ -6,7 +6,7 @@ test('the production login page and health use only the same-origin proxy', asyn
   const requests: string[] = [];
   page.on('request', (request) => requests.push(request.url()));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Bid Intelligence', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /^Bid Intelligence/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Publisher login' })).toBeVisible();
   const ready = await page.evaluate(async () => {
     const response = await fetch('/api/health/ready');

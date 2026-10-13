@@ -4,7 +4,7 @@ A publisher ad-ops assistant for investigating auction performance with evidence
 
 ## Current capabilities
 
-Publisher login, persistent streaming investigation chat, Stop/resume, numerical tool results and evidence links are implemented. Five read-only tools investigate small, explicitly labelled demo fixtures for two isolated publishers. The agent uses LangGraph with the real OpenAI SDK; model settings stay server-side. Configuration changes and historical datasets remain deferred.
+Publisher login, persistent streaming investigation chat, Stop/resume, numerical tool results and evidence links are implemented. The workspace separates history, messages and tool activity into three columns, following [the design system](DESIGN.md). New chats remain unsaved drafts until the first message is sent. Five read-only tools investigate small, explicitly labelled demo fixtures for two isolated publishers. The agent uses LangGraph with the real OpenAI SDK; model settings stay server-side. Configuration changes and historical datasets remain deferred.
 
 React/Fastify plus **DynamoDB Local** for users/publisher records and **PostgreSQL** for conversations/LangGraph checkpoints. Drizzle manages application SQL migrations; LangGraph's official saver manages its own schema. Authentication is stateless signed cookies—**no session data is stored in any database**. Logout clears the cookie; a copied token remains valid until expiry.
 
@@ -15,8 +15,8 @@ Docker with Compose is the supported runtime. Preserve an existing private `.env
 ```sh
 # Initial setup only; do not overwrite an existing .env.
 cp .env.example .env
-# Privately configure AUTH_SIGNING_SECRET (persistent random >=32 bytes),
-# DEMO_PASSWORD_A/B, APP_ORIGIN and reachable LLM_BASE_URL/LLM_API_KEY/LLM_MODEL.
+# Demo defaults work with local Ollama; first install the model:
+ollama pull qwen3.5:9b
 docker compose build api web
 docker compose up -d --wait dynamodb postgres
 docker compose run --rm --no-deps api node dist/commands/cli.js db:init
@@ -25,7 +25,7 @@ docker compose run --rm --no-deps api node dist/commands/cli.js users:bootstrap
 docker compose up -d --wait
 ```
 
-Open [localhost:8080](http://localhost:8080). API/web/DynamoDB host bindings are loopback-only; Postgres has no host port. Normal startup does not seed data, migrate SQL or contact the model. See [demo accounts](docs/requirements/phase%201/DEMO-ACCOUNTS.md) for this checkout's explicitly requested **demo-only** credentials/setup status; never reuse those passwords.
+Open [localhost:8080](http://localhost:8080). API/web/DynamoDB host bindings are loopback-only; Postgres has no host port. Local demo defaults include the existing demo passwords and a public signing key; do not use these for a shared deployment. Ollama defaults to `qwen3.5:9b` with no real API key. Docker Desktop's built-in `host.docker.internal:11434` bridge reaches your local Ollama without an extra proxy or system-service changes; the first model load can take about 70 seconds. Normal startup does not seed data, migrate SQL or contact the model. See [demo accounts](docs/requirements/phase%201/DEMO-ACCOUNTS.md) for this checkout's explicitly requested **demo-only** credentials/setup status; never reuse those passwords.
 
 ## Check
 

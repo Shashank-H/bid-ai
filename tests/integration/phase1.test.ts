@@ -118,6 +118,43 @@ it('uses real credentials/stateless cookies without adding session rows and pres
   expect(rows.Items.every((row: { PK: { S: string } }) => /^(USER|LOGIN)#/.test(row.PK.S))).toBe(true);
 });
 
+it('lists only conversations with accepted messages, preserving failed and cancelled turns without empty drafts consuming pages', async () => {
+  const auth = await identityA();
+  const draft = await createConversation();
+  const rejected = await app.inject({ method: 'POST', url: `/api/conversations/${draft.id}/turns`, headers: headers(),
+    payload: { requestId: randomUUID(), message: '   ' } });
+  expect(rejected.statusCode).toBe(400);
+  expect((await app.inject({ url: '/api/conversations', headers: headers() })).json().conversations)
+    .not.toContainEqual(expect.objectContaining({ id: draft.id }));
+
+  const accepted = await repository.accept(auth.identity, draft.id, { requestId: randomUUID(), message: 'First saved question' });
+  await repository.finish(auth.identity, draft.id, accepted.turn.id, accepted.generation, 'error', '', 'MODEL_FAILED');
+  const cancelled = await createConversation();
+  const second = await repository.accept(auth.identity, cancelled.id, { requestId: randomUUID(), message: 'Cancelled question' });
+  await repository.cancel(auth.identity, cancelled.id, second.turn.id);
+
+  for (let index = 0; index < 21; index++) await createConversation();
+
+  const page = (await app.inject({ url: '/api/conversations', headers: headers() })).json();
+  expect(page.conversations).toContainEqual(expect.objectContaining({ id: draft.id, title: 'First saved question' }));
+  expect(page.conversations).toContainEqual(expect.objectContaining({ id: cancelled.id, title: 'Cancelled question' }));
+  expect(page.nextCursor).toBeNull();
+
+  for (let index = 0; index < 20; index++) {
+    const conversation = await createConversation();
+    const turn = await repository.accept(auth.identity, conversation.id, { requestId: randomUUID(), message: `Question ${index}` });
+    await repository.cancel(auth.identity, conversation.id, turn.turn.id);
+  }
+
+  const firstPage = (await app.inject({ url: '/api/conversations', headers: headers() })).json();
+  expect(firstPage.conversations).toHaveLength(20);
+  expect(firstPage.nextCursor).toBeTruthy();
+  const olderPage = (await app.inject({ url: `/api/conversations?cursor=${firstPage.nextCursor}`, headers: headers() })).json();
+  expect(olderPage.conversations.map((conversation: { id: string }) => conversation.id).sort()).toEqual([draft.id, cancelled.id].sort());
+  expect(olderPage.nextCursor).toBeNull();
+  expect((await app.inject({ url: '/api/conversations', headers: headers(cookieB) })).json().conversations).toEqual([]);
+});
+
 it('runs actual SDK fragmented multi-tool continuation, validates evidence, reloads history and keeps provider reasoning/secrets private', async () => {
   const conversation = await createConversation();
   const requestId = randomUUID();
@@ -285,6 +322,16 @@ it('enforces consistent fixture metrics, empty periods, strict tool boundaries a
   const state = initialState('t', []);
   expect(() => validateAnswer({ ...state, answer: 'Revenue fell 20%.' })).toThrow('no supporting observations');
   validateAnswer({ ...state, answer: INSUFFICIENT_EVIDENCE });
+
+  const configuration = await dispatchTool('current_configuration', '{}', context);
+  const id = configuration.evidence[0]!.evidenceId;
+  const answer = `Observation: Demo configuration [${id}].\nHypothesis: The effect is uncertain.\nRecommendation: Investigate before changing anything.`;
+  validateAnswer({ ...state, evidence: configuration.evidence, answer });
+  validateAnswer({ ...state, evidence: configuration.evidence, answer: answer.replace(`[${id}]`, `[${id}, ${id}]`) });
+  expect(() => validateAnswer({ ...state, evidence: configuration.evidence, answer: answer.replace(`[${id}]`, `[${id}, invented]`) })).toThrow('missing or unknown evidence');
+  expect(() => validateAnswer({ ...state, evidence: configuration.evidence, answer: answer.replace(`[${id}]`, '') })).toThrow('missing or unknown evidence');
+  expect(() => validateAnswer({ ...state, evidence: configuration.evidence, answer: answer.replace(`[${id}]`, '[invented]') })).toThrow('missing or unknown evidence');
+
   const runner = modelRunner({ ...env, LLM_BASE_URL: model.url, LLM_MODEL: 'fake', LLM_API_KEY: 'private' }, tracing);
   await expect(runner(initialState('t', [{ role: 'user', content: 'x'.repeat(131_073) }]), context.signal, () => {})).rejects.toMatchObject({ code: 'BUDGET_EXCEEDED' });
 });

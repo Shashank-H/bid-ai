@@ -2,7 +2,7 @@
 
 ## Runtime and prerequisites
 
-Use Docker with a recent Compose plugin (`docker compose`). Initial builds require internet access for public container images, pinned pnpm packages and Chromium binaries. No host Node, pnpm, AWS credentials or cloud account is required. Health/login do not contact a model; investigations require privately configured model settings.
+Use Docker with a recent Compose plugin (`docker compose`). Initial builds require internet access for public container images, pinned pnpm packages and Chromium binaries. No host Node, pnpm, AWS credentials or cloud account is required. Health/login do not contact a model. Investigations default to host Ollama with `qwen3.5:9b`, using a non-secret SDK key placeholder. Blank/missing demo model/auth/password settings use checked-in demo defaults; explicit nonblank overrides still work. Compose loads model overrides from `.env` via `env_file` rather than inheriting host-shell `LLM_*` values, preventing host-local `localhost` URLs from replacing Docker addressing.
 
 The repository has three workspaces:
 
@@ -18,8 +18,8 @@ From the repository root, copy `.env.example` once for initial setup; preserve a
 
 ```sh
 cp .env.example .env
-# Edit .env privately: AUTH_SIGNING_SECRET (random persistent >=32 bytes),
-# DEMO_PASSWORD_A/B (12–256 characters), APP_ORIGIN and model settings.
+# Demo values are preconfigured; replace public passwords/signing key for shared deployments.
+ollama pull qwen3.5:9b
 docker compose config --quiet
 docker compose build api web
 docker compose up -d --wait dynamodb postgres
@@ -54,8 +54,10 @@ Do not remove volumes as part of ordinary startup or shutdown. After source chan
 | `SESSION_COOKIE_NAME` | `bid_session`; identifier-style cookie name |
 | `SESSION_LIFETIME_SECONDS` | 28800; validated range 60–604800 |
 | `SESSION_COOKIE_SECURE` | `false`; accepts only `true`/`false`; signed HttpOnly SameSite=Strict cookie; Secure=true requires HTTPS |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Private server-only values; all required for an investigation or explicit model probe, never sent to the browser |
-| `LLM_TIMEOUT_MS` | 30000; model/probe request setting accepts 1000–120000; product also enforces the turn deadline |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | `http://host.docker.internal:11434/v1`, `ollama` (non-secret placeholder), `qwen3.5:9b`; explicit nonblank overrides supported |
+| `LLM_TIMEOUT_MS` | 110000; model/probe accepts 1000–120000; product also enforces the turn deadline |
+| `LLM_REASONING_EFFORT`, `LLM_TEMPERATURE` | Standard request options, default `none` / `0`, independently configurable for other models |
+| `AUTH_SIGNING_SECRET`, `DEMO_PASSWORD_A/B` | Public local-demo defaults matching DEMO-ACCOUNTS.md; replace for shared deployment |
 
 Three empty tables are provisioned: `<prefix>-identity`, `<prefix>-publisher-data`, `<prefix>-workflow`. Their `PK`/`SK` keys are **provisional foundation placeholders**, not committed future access-pattern design. The foundation identity TTL remains provisioned but is unused by authentication: **no sessions/token hashes are stored**. Init refuses incompatible existing keys/TTL and never silently deletes data to repair them.
 
@@ -142,7 +144,9 @@ services:
 
 Then run the probe with `docker compose -f compose.yaml -f compose.model-host.yaml run --rm --no-deps api node dist/commands/cli.js model:probe` and set a matching `http://host.docker.internal:<port>/v1` URL privately. The model server must listen on an interface reachable from Docker, not only host loopback; restrict access with network/firewall/authentication settings. No local model container is added here.
 
-The live compatibility probe previously passed for the configured model; see [audited results](TRACING-VERIFICATION.md). The current agent was tested with the actual SDK/LangGraph and a deterministic fake HTTP model. Its new live smoke was skipped because a required private model-key setting was missing; no new live-agent success is claimed.
+This checkout runs Docker Desktop: its built-in `host.docker.internal:11434` forwarding reaches host loopback Ollama directly. The API has the host mapping configured; no custom proxy service is needed. Native Linux Docker (without Desktop) may instead require binding Ollama to a Docker-reachable interface via `OLLAMA_HOST`; keep that access restricted to the local machine.
+
+A real `qwen3.5:9b` check returned OK through both native and OpenAI-compatible APIs. Cold loading took ~67 seconds; warm inference took ~1 second. Product requests use `max_tokens` and standard configurable `LLM_REASONING_EFFORT=none` / `LLM_TEMPERATURE=0` defaults. The adapter contains no model-name checks or provider-specific tool parser. The earlier missing-key smoke limitation is superseded: local Ollama requires no secret API key. The real app comparison completed with citations and saved reload in 31 seconds; see [phase verification](../requirements/phase%201/VERIFICATION.md) for results and model-quality limitations.
 
 ## Future command shells
 
@@ -158,7 +162,7 @@ The live compatibility probe previously passed for the configured model; see [au
 
 ## Read-only agent, authentication and recovery
 
-- Configure `AUTH_SIGNING_SECRET` privately with a persistent random value of at least 32 bytes. Missing settings make authentication unavailable; startup does not invent a key. `APP_ORIGIN` must exactly match the browser origin (update it if changing WEB_PORT).
+- The demo has a stable public `AUTH_SIGNING_SECRET` fallback; a configured nonblank secret overrides it. Replace it with a persistent random value of at least 32 bytes before sharing the application. `APP_ORIGIN` must exactly match the browser origin (update it if changing WEB_PORT).
 - Authentication is stateless signed cookies, not DB sessions. Every request rechecks the DynamoDB user's disabled flag and current single-publisher membership. Logout clears the cookie and cancels local active streams; a copied token remains valid until expiry. Rotating the signing secret invalidates all tokens. Local capped login throttling is single-process, not production abuse protection.
 - `POSTGRES_PASSWORD` defaults to a local-development-only value; optional `DATABASE_URL` overrides the internal connection. Application tables live in `public` with Drizzle migration tracking in `drizzle`; official LangGraph saver tables live in `agent_checkpoints`. Neither store contains authentication session records.
 - Fixed fixtures: Publisher A January 1–14, 2026; Publisher B February 1–14, 2026, UTC. Publisher metadata/accounts are persisted by bootstrap, but these aggregate observations remain checked-in fixtures—not a historical DynamoDB data seed.

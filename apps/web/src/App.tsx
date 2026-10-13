@@ -40,15 +40,11 @@ export function App() {
     }
   }
 
-  return <main className="app">
-    <header className="app-header">
-      <div><p className="eyebrow">Local development · Read-only demo</p><h1>Bid Intelligence</h1></div>
-      {auth && <div><p>{auth.user.login} · {auth.publisherId}</p><button type="button" className="secondary" onClick={() => void logout()}>Log out</button></div>}
-    </header>
-    {checking ? <p role="status">Checking your login…</p> : <>
-      {error && <section className="status-panel"><p role="alert" className="error">{error}</p><button onClick={() => setRetry((value) => value + 1)}>Check again</button></section>}
-      {auth ? <Chat key={`${auth.user.userId}:${auth.publisherId}`} auth={auth} onUnauthorized={clearAuth} /> : <Login onLogin={setAuth} />}
+  return <main className={`app${auth ? ' authenticated' : ' signed-out'}`}>
+    {!auth && <header className="app-header"><h1>Bid Intelligence<span className="brand-dot">.</span></h1><p className="hint">A clearer view of your auction performance.</p></header>}
+    {checking ? <p className="session-status" role="status">Checking your login…</p> : <>
+      {error && <section className="app-error"><p role="alert" className="error">{error}</p><button className="secondary" onClick={() => setRetry((value) => value + 1)}>Check again</button></section>}
+      {auth ? <Chat key={`${auth.user.userId}:${auth.publisherId}`} auth={auth} onUnauthorized={clearAuth} onLogout={() => void logout()} /> : <Login onLogin={setAuth} />}
     </>}
-    <p className="scope">Synthetic demo earnings are estimated revenue. Tools cannot change configuration or deploy to a publisher website.</p>
   </main>;
 }

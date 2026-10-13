@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, lt, or, sql } from 'drizzle-orm';
 import type { UserPublisherContext } from '../domain/interfaces.js';
 import type { Postgres } from './postgres.js';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
@@ -46,8 +46,10 @@ export class ConversationRepository {
   async list(identity: UserPublisherContext, cursor?: string) {
     const before = cursor ? await this.owned(identity, cursor) : null;
     const rows = await this.postgres.db.select().from(conversations)
-      .where(and(this.owner(identity), before ? or(lt(conversations.createdAt, before.createdAt),
-        and(eq(conversations.createdAt, before.createdAt), lt(conversations.id, before.id))) : undefined))
+      .where(and(this.owner(identity),
+        exists(this.postgres.db.select({ id: turns.id }).from(turns).where(eq(turns.conversationId, conversations.id))),
+        before ? or(lt(conversations.createdAt, before.createdAt),
+          and(eq(conversations.createdAt, before.createdAt), lt(conversations.id, before.id))) : undefined))
       .orderBy(desc(conversations.createdAt), desc(conversations.id)).limit(21);
 
     return { conversations: rows.slice(0, 20).map((row) => this.publicConversation(row)),
