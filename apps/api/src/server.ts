@@ -1,8 +1,13 @@
 import { buildApp } from './app.js';
-import { readEnvironment, readTracingSettings } from './env.js';
+import { readEnvironment, readTracingSettings, readAuthSettings } from './env.js';
 import type { TracingRuntime } from './observability/tracing.js';
 import { createDatabaseClient } from './db/client.js';
 import { databaseReady } from './db/readiness.js';
+import { IdentityRepository } from './db/identity.js';
+import { Authorization } from './auth/authorization.js';
+import { createPostgres, postgresUrl } from './db/postgres.js';
+import { ConversationRepository } from './db/conversations.js';
+import { AgentService } from './agent/service.js';
 
 let tracing: TracingRuntime | undefined;
 
@@ -12,9 +17,17 @@ try {
   const { initializeTracing } = await import('./observability/tracing.js');
   tracing = initializeTracing(tracingSettings, { secrets: [process.env['LLM_API_KEY'] ?? ''] });
   const client = createDatabaseClient(settings);
-  const app = buildApp({ checkReady: () => databaseReady(client, settings.tablePrefix) }, true);
+  const authorization = new Authorization(new IdentityRepository(client, settings.tablePrefix), () => readAuthSettings(process.env));
+  const postgres = createPostgres(postgresUrl(process.env));
+  const conversations = new ConversationRepository(postgres);
+  const { modelRunner } = await import('./agent/model.js');
+  const agent = new AgentService(conversations, authorization, modelRunner(process.env, tracing), tracing);
+  const app = buildApp({ checkReady: async () => await databaseReady(client, settings.tablePrefix) && await conversations.assertReady() },
+    true, { authorization, agent, cancelUser: (userId) => agent.cancelUser(userId) });
 
   app.addHook('onClose', async () => {
+    await agent.shutdown();
+    await postgres.pool.end();
     client.destroy();
     await tracing?.shutdown();
   });

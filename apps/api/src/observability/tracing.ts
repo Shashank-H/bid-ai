@@ -16,7 +16,8 @@ export interface TracingRuntime {
   readonly traceId: string | undefined;
   probe<T>(operation: () => Promise<T>): Promise<T>;
   generation<T>(name: string, client: OpenAI, operation: (client: OpenAI) => Promise<T>): Promise<T>;
-  tool<T>(input: unknown, operation: () => T): Promise<T>;
+  tool<T>(input: unknown, operation: () => T | Promise<T>, name?: string): Promise<T>;
+  turn<T>(input: { conversationId: string; turnId: string; publisherId: string }, operation: () => Promise<T>): Promise<T>;
   flush(): Promise<void>;
   shutdown(): Promise<void>;
 }
@@ -27,6 +28,7 @@ const disabledTracing: TracingRuntime = {
   probe: (operation) => operation(),
   generation: (_name, client, operation) => operation(client),
   tool: async (_input, operation) => operation(),
+  turn: (_input, operation) => operation(),
   flush: async () => {},
   shutdown: async () => {},
 };
@@ -359,9 +361,23 @@ export function initializeTracing(settings: TracingSettings, options: {
         processor.finishGeneration(parentId, name, failure, scope);
       }
     },
-    tool: (input, operation) => startActiveObservation('execute-probe-echo', async (span) => {
+    turn: (input, operation) => propagateAttributes({ traceName: 'publisher-investigation', sessionId: input.conversationId,
+      tags: ['feature:investigation'] }, () => startActiveObservation('publisher-investigation', async (span) => {
       span.update({ input });
-      const output = operation();
+
+      try {
+        const result = await operation();
+        span.update({ output: { finished: true } });
+
+        return result;
+      } catch (error) {
+        span.update({ level: 'ERROR', statusMessage: safeErrorCode(error), output: { error: safeErrorCode(error) } });
+        throw error;
+      }
+    })),
+    tool: (input, operation, name = 'execute-probe-echo') => startActiveObservation(name, async (span) => {
+      span.update({ input });
+      const output = await operation();
       span.update({ output });
 
       return output;

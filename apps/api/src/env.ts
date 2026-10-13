@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { localEndpoint, TablePrefixSchema } from './db/client.js';
 import type { DatabaseSettings } from './db/client.js';
+import type { AuthSettings } from './auth/token.js';
 
 export class ConfigurationError extends Error {
   constructor() {
@@ -55,6 +56,21 @@ export function readEnvironment(env: NodeJS.ProcessEnv = process.env) {
   });
 }
 
+/** Authentication stays unavailable rather than inventing an ephemeral signing key. */
+export function readAuthSettings(env: NodeJS.ProcessEnv = process.env): AuthSettings {
+  return safeRead(() => {
+    const runtime = readEnvironment(env);
+    const secret = z.string().min(32).max(1024).parse(env['AUTH_SIGNING_SECRET']);
+    const origin = z.string().url().parse(env['APP_ORIGIN'] ?? `http://localhost:${runtime.hostPorts.web}`);
+    const url = new URL(origin);
+
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+      || url.origin !== origin || Buffer.byteLength(secret) < 32) throw new Error('Invalid auth configuration');
+
+    return { ...runtime.session, secret, origin };
+  });
+}
+
 export type TracingSettings = { enabled: false } | {
   enabled: true;
   baseURL: string;
@@ -92,6 +108,17 @@ export function readTracingSettings(env: NodeJS.ProcessEnv = process.env): Traci
       environment: values.LANGFUSE_TRACING_ENVIRONMENT,
       timeoutMs: values.LANGFUSE_TIMEOUT_MS,
     };
+  });
+}
+
+export function readAgentSettings(env: NodeJS.ProcessEnv = process.env) {
+  return safeRead(() => {
+    const values = z.object({
+      AGENT_DEADLINE_MS: z.coerce.number().int().min(1000).max(110000).default(110000),
+      AGENT_MAX_COMPLETION_TOKENS: z.coerce.number().int().min(64).max(8192).default(4096),
+    }).parse(env);
+
+    return { deadlineMs: values.AGENT_DEADLINE_MS, maxCompletionTokens: values.AGENT_MAX_COMPLETION_TOKENS };
   });
 }
 

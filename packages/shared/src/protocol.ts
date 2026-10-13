@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { IdSchema, TimestampSchema } from './common.js';
 import { ConfigurationSettingsSchema } from './configuration.js';
+import { ToolDataSchema } from './analytics.js';
 
 export const EvidenceReferenceSchema = z.strictObject({
   evidenceId: IdSchema,
@@ -18,13 +19,14 @@ export const FindingSchema = z.strictObject({
 });
 
 export const SafeErrorSchema = z.strictObject({
-  code: z.enum(['UNAUTHORIZED', 'INVALID_INPUT', 'NOT_IMPLEMENTED', 'DEPENDENCY_UNAVAILABLE', 'TOOL_FAILED', 'MODEL_INCOMPATIBLE', 'BUDGET_EXCEEDED', 'TIMEOUT', 'CANCELLED', 'INTERNAL_ERROR']),
+  code: z.enum(['UNAUTHORIZED', 'INVALID_INPUT', 'NOT_IMPLEMENTED', 'DEPENDENCY_UNAVAILABLE', 'TOOL_FAILED', 'MODEL_INCOMPATIBLE', 'BUDGET_EXCEEDED', 'TIMEOUT', 'CANCELLED', 'INTERNAL_ERROR', 'NOT_FOUND', 'CONFLICT', 'RATE_LIMITED', 'EVIDENCE_INVALID']),
   message: z.string().min(1).max(500),
 });
 
 export const ToolResultSchema = z.strictObject({
   // Bounded serialized results; additional model/provider fields are not accepted here.
   summary: z.string().max(4000),
+  data: ToolDataSchema.optional(),
   evidence: z.array(EvidenceReferenceSchema).max(100),
   findings: z.array(FindingSchema).max(50),
 }).refine(({ evidence, findings }) => {
@@ -33,15 +35,16 @@ export const ToolResultSchema = z.strictObject({
   return ids.size === evidence.length && findings.every((finding) => finding.evidenceIds.every((id) => ids.has(id)));
 }, { message: 'Findings require unique, present evidence references' });
 
-const StreamFields = { turnId: IdSchema, correlationId: IdSchema };
+const StreamFields = { turnId: IdSchema, correlationId: IdSchema, conversationId: IdSchema.optional() };
 
 export const StreamEventSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...StreamFields, type: z.literal('turn-start') }),
+  z.strictObject({ ...StreamFields, type: z.literal('text-reset') }),
   z.strictObject({ ...StreamFields, type: z.literal('text-delta'), text: z.string().max(16_384) }),
-  z.strictObject({ ...StreamFields, type: z.literal('tool-start'), toolCallId: IdSchema, toolName: IdSchema }),
+  z.strictObject({ ...StreamFields, type: z.literal('tool-start'), toolCallId: IdSchema, toolName: IdSchema, argumentsJson: z.string().max(16_384).optional() }),
   z.strictObject({ ...StreamFields, type: z.literal('tool-result'), toolCallId: IdSchema, result: ToolResultSchema }),
   z.strictObject({ ...StreamFields, type: z.literal('tool-error'), toolCallId: IdSchema, error: SafeErrorSchema }),
-  z.strictObject({ ...StreamFields, type: z.literal('turn-complete') }),
+  z.strictObject({ ...StreamFields, type: z.literal('turn-complete'), evidence: z.array(EvidenceReferenceSchema).max(100).optional() }),
   z.strictObject({ ...StreamFields, type: z.literal('turn-cancelled') }),
   z.strictObject({ ...StreamFields, type: z.literal('turn-error'), error: SafeErrorSchema }),
 ]);

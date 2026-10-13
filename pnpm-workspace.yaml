@@ -6,3 +6,4 @@ syncInjectedDepsAfterScripts:
   - build
 onlyBuiltDependencies:
   - esbuild
+  - argon2

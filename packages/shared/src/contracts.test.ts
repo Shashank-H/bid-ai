@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AuctionEventSchema, BidderMetricsSchema, ConfigurationHistorySchema, ConfigurationSettingsSchema, DailyMetricsSchema, PeriodInputSchema, ProposalSchema, PublicUserSchema, SessionSchema, StreamEventSchema, ToolResultSchema } from './index.js';
+import { AuctionEventSchema, BidderMetricsSchema, ConfigurationHistorySchema, ConfigurationSettingsSchema, DailyMetricsSchema, PeriodInputSchema, ProposalSchema, PublicUserSchema, StreamEventSchema, ToolResultSchema } from './index.js';
 
 const timestamp = '2026-01-01T00:00:00.000Z';
 const settings = { floorCpm: 0.8, auctionTimeoutMs: 1000, enabledBidders: ['bidder-a'], currency: 'USD' };
@@ -13,12 +13,7 @@ describe('foundation contracts', () => {
     expect(PeriodInputSchema.safeParse({ startDate: '2026-01-01', endDate: '2026-04-01' }).success).toBe(false);
   });
 
-  it('validates hashed sessions and does not expose credentials in public users', () => {
-    const session = { tokenHash: 'a'.repeat(64), userId: 'u1', createdAt: timestamp, expiresAt: Date.parse(timestamp) / 1000 + 3600 };
-
-    expect(SessionSchema.parse(session)).toEqual(session);
-    expect(SessionSchema.safeParse({ ...session, tokenHash: 'raw-token' }).success).toBe(false);
-    expect(SessionSchema.safeParse({ ...session, expiresAt: 1 }).success).toBe(false);
+  it('does not expose credentials in public users', () => {
     expect(PublicUserSchema.safeParse({ userId: 'u1', login: 'alice', credentialHash: 'secret' }).success).toBe(false);
   });
 

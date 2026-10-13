@@ -4,36 +4,45 @@ A publisher ad-ops assistant for investigating auction performance with evidence
 
 ## Current capabilities
 
-The local foundation is implemented: a React status page, Fastify health/readiness API, persistent DynamoDB Local with repeat-safe empty-table initialization, shared TypeScript contracts, and a server-only model compatibility probe with optional Langfuse tracing. Login, chat, datasets and configuration changes are not implemented yet. The configured local model passed the live streaming/tool-call probe; [tracing verification](docs/architecture-and-implementation/TRACING-VERIFICATION.md) records the audited observations and runtime requirements.
+Publisher login, persistent streaming investigation chat, Stop/resume, numerical tool results and evidence links are implemented. Five read-only tools investigate small, explicitly labelled demo fixtures for two isolated publishers. The agent uses LangGraph with the real OpenAI SDK; model settings stay server-side. Configuration changes and historical datasets remain deferred.
 
-Three pnpm workspaces: `apps/web`, `apps/api` (including domain/tools/database/commands), and `packages/shared` (browser-safe contracts). Docker Compose runs `web`, `api`, `dynamodb`, and a one-shot `db-init` job. No cloud resources or model hosting are required.
+React/Fastify plus **DynamoDB Local** for users/publisher records and **PostgreSQL** for conversations/LangGraph checkpoints. Drizzle manages application SQL migrations; LangGraph's official saver manages its own schema. Authentication is stateless signed cookies—**no session data is stored in any database**. Logout clears the cookie; a copied token remains valid until expiry.
 
 ## Run
 
-Requires Docker with Compose; no host Node/pnpm installation needed.
+Docker with Compose is the supported runtime. Preserve an existing private `.env`:
 
 ```sh
-# Initial setup only: do not overwrite an existing private .env.
+# Initial setup only; do not overwrite an existing .env.
 cp .env.example .env
-# Keep .env private; model settings may remain blank for foundation startup.
-docker compose config --quiet
-docker compose up --build -d --wait
+# Privately configure AUTH_SIGNING_SECRET (persistent random >=32 bytes),
+# DEMO_PASSWORD_A/B, APP_ORIGIN and reachable LLM_BASE_URL/LLM_API_KEY/LLM_MODEL.
+docker compose build api web
+docker compose up -d --wait dynamodb postgres
+docker compose run --rm --no-deps api node dist/commands/cli.js db:init
+docker compose run --rm --no-deps api node dist/commands/cli.js postgres:init
+docker compose run --rm --no-deps api node dist/commands/cli.js users:bootstrap
+docker compose up -d --wait
 ```
 
-Open [localhost:8080](http://localhost:8080). Web/API host ports bind to loopback and can be changed in `.env`; DynamoDB is available at [localhost:8000](http://localhost:8000), also loopback-only. Ordinary startup does not load data or contact a model.
+Open [localhost:8080](http://localhost:8080). API/web/DynamoDB host bindings are loopback-only; Postgres has no host port. Normal startup does not seed data, migrate SQL or contact the model. See [demo accounts](docs/requirements/phase%201/DEMO-ACCOUNTS.md) for this checkout's explicitly requested **demo-only** credentials/setup status; never reuse those passwords.
 
 ## Check
 
 ```sh
 docker compose -f compose.yaml -f compose.test.yaml build api web
 docker compose -f compose.yaml -f compose.test.yaml run --rm --no-deps api sh -lc 'pnpm build && pnpm typecheck && pnpm test && pnpm test:integration'
-docker compose -f compose.yaml -f compose.test.yaml run --rm --no-deps web pnpm test:e2e
+# Isolated real API/database/browser flow with a deterministic fake HTTP model:
+docker compose -f compose.yaml -f compose.test.yaml -f compose.e2e.yaml build agent-test-web
+docker compose -f compose.yaml -f compose.test.yaml -f compose.e2e.yaml up -d --wait agent-test-api agent-test-web
+docker compose -f compose.yaml -f compose.test.yaml -f compose.e2e.yaml run --rm --no-deps web pnpm test:e2e
+docker compose -f compose.yaml -f compose.test.yaml -f compose.e2e.yaml stop agent-test-web agent-test-api
 ```
 
-See the [local runbook](docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md) for database checks, persistence, model settings, diagnostics and explicitly destructive resets. [Langfuse tracing](docs/architecture-and-implementation/TRACING.md) documents opt-in configuration, privacy controls and live trace verification.
+See the [runbook](docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md), [verification](docs/requirements/phase%201/VERIFICATION.md) and [optional tracing](docs/architecture-and-implementation/TRACING.md).
 
 ## Documentation
 
 - [Implementation roadmap](docs/architecture-and-implementation/IMPLEMENTATION-ROADMAP.md)
 - [Requirements](docs/requirements/Full-Requirements.md) · [Exercise brief](docs/architecture-and-implementation/Full-Coding-Task.md)
-- [Foundation plan](docs/requirements/phase%200/PLAN.md) · [Initial foundation verification](docs/requirements/phase%200/VERIFICATION.md)
+- [Read-only agent plan](docs/requirements/phase%201/PLAN.md) · [Foundation plan](docs/requirements/phase%200/PLAN.md) · [Initial foundation verification](docs/requirements/phase%200/VERIFICATION.md)

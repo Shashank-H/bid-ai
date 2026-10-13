@@ -4,7 +4,7 @@
 
 Build an agent-first publisher ad-ops assistant. Prioritize a functioning agent before historical datasets, synthetic scenario generation, or advanced analytics. Complete the shared setup once in Phase 0; Phase 1 starts product implementation.
 
-The Phase 0 local foundation is implemented: compiled web/API shells, shared contracts, persistent DynamoDB Local resources, operational commands, and local tests. Product functionality remains unimplemented. The real Llama-compatible endpoint probe is still pending privately supplied settings; see `docs/requirements/phase 0/VERIFICATION.md`.
+The Phase 0 local foundation is implemented: compiled web/API shells, shared contracts, persistent DynamoDB Local resources, operational commands, and local tests. Product functionality remains unimplemented. The configured live endpoint passed the audited compatibility probe; see `docs/architecture-and-implementation/TRACING-VERIFICATION.md`. Phase 1 now implements the read-only agent; its new live smoke is not claimed without current complete private settings.
 
 Requirements source: `docs/requirements/Full-Requirements.md`. Preserve the exercise brief at `docs/architecture-and-implementation/Full-Coding-Task.md`.
 
@@ -35,24 +35,24 @@ Optional later MCP adapter ── same tool functions / shared services
 ```
 
 - **Monorepo:** pnpm workspaces; TypeScript throughout. React/Vite for the dashboard; a small Node HTTP server such as Fastify hosts the agent, user/authentication module, configuration management, and approval routes together.
-- **Agent:** OpenAI SDK pointed at the user's compatible server through `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`. Implement a bounded tool-calling loop, not a scripted chatbot. No model hosting or model selection work is planned. The endpoint must support streaming and tool calls; verify compatibility early.
+- **Agent:** OpenAI SDK pointed at the user's compatible server through `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`. Implement a bounded LangGraph JS tool-calling graph with PostgreSQL checkpoints, not a scripted chatbot. No model hosting or model selection work is planned. The endpoint must support streaming and tool calls; verify compatibility early.
 - **First-class tools:** each tool has a name, description, input/output schema, and ordinary TypeScript execution function. The agent validates arguments and calls the function directly with server-derived user/publisher context. Tool functions invoke shared domain services; these are independent of both LLM and transport protocols. Swap fixture repositories for DynamoDB repositories without changing tool definitions.
 - **Optional MCP:** not part of the core agent path or required phase sequence. If requested later, export the same tool functions through an MCP adapter, or wrap the same shared services; do not duplicate business logic or make the agent depend on MCP. A future adapter can live in the existing backend, without another database or mandatory Compose service.
-- **Persistence:** DynamoDB Local with a Docker volume. AWS SDK v3 is used only as the DynamoDB client against its local endpoint, with local-only credentials. Redis is not needed or planned; neither are PostgreSQL, vector databases, queue brokers, or other AWS services.
-- **Data model:** users, publisher memberships, local sessions, publisher-scoped Prebid events, aggregated daily/bidder metrics, current configurations, and immutable configuration change history. Each configuration save records the authenticated updating user's ID, publisher, timestamp, before/after values or diff, and configuration version; agent-approved changes also reference their proposal and approving user. Later proposals/audit records reuse that attribution. Define logical entities/access patterns in Phase 0; refine keys/indexes in phase plans.
+- **Persistence:** DynamoDB Local with a Docker volume. AWS SDK v3 is used only as the DynamoDB client against its local endpoint, with local-only credentials. PostgreSQL is included by user-approved Phase 1 revision for conversations/checkpoints; Drizzle manages application tables and the official LangGraph saver manages checkpoint tables. Redis, vector databases, queue brokers and other AWS services are not planned.
+- **Data model:** users, publisher memberships, stateless signed-cookie authentication (no stored sessions), publisher-scoped Prebid events, aggregated daily/bidder metrics, current configurations, and immutable configuration change history. Each configuration save records the authenticated updating user's ID, publisher, timestamp, before/after values or diff, and configuration version; agent-approved changes also reference their proposal and approving user. Later proposals/audit records reuse that attribution. Define logical entities/access patterns in Phase 0; refine keys/indexes in phase plans.
 - **Seed-first data:** provide explicit commands to validate and write synthetic Prebid events, configurations, and user-attributed configuration history into DynamoDB, then derive reconciled metrics. No live browser integration, injected script, collector, or event-ingestion API is required. Start with a tiny fixture for the agent and add persisted seed data after it works.
-- **User module and security:** the same backend that hosts the agent authenticates users and resolves their publisher memberships. Use hashed credentials and server-validated sessions stored in DynamoDB, with no external identity service or Redis session store. Bootstrap a minimal set of development users explicitly; keep this separate from the later historical dataset. Configuration routes let authorized users modify/save settings through shared services. Tool dispatch and all configuration writes use trusted user/publisher context, never an unrestricted model-supplied publisher ID.
+- **User module and security:** the same backend that hosts the agent authenticates users and resolves their publisher memberships. Use Argon2id credentials in DynamoDB and stateless signed expiring cookies with fresh disabled-user/membership checks; never persist session records. Logout clears the cookie but does not revoke a copied token. No external identity service or Redis session store. Bootstrap a minimal set of development users explicitly; keep this separate from the later historical dataset. Configuration routes let authorized users modify/save settings through shared services. Tool dispatch and all configuration writes use trusted user/publisher context, never an unrestricted model-supplied publisher ID.
 - **Testing:** shared validation schemas, unit/integration tests, and browser end-to-end tests, run locally. No CI/CD pipelines.
 
-Docker Compose owns `web`, `api`, `dynamodb`, and an idempotent database-init job. Run user-bootstrap, seed/generation, and verification commands through existing containers. No MCP service, model service, collector, or Redis container is required. Do not add infrastructure services for each subsequent phase.
+Docker Compose owns `web`, `api`, `dynamodb`, `postgres`, and an idempotent DynamoDB-init job; PostgreSQL migrations are explicit. Run user-bootstrap, seed/generation, and verification commands through existing containers. No production MCP/model/collector/Redis service is required. Test-only isolated API/web services are optional; subsequent phases reuse this setup.
 
-Phase 0 is complete setup, not speculative product implementation: empty database entities, service skeletons, build outputs, environment configuration, and scripts are ready. Later phases can evolve schemas and add dependencies as implementation details become clear, but must not require another environment bootstrap or introduce unplanned databases.
+Phase 0 is complete setup, not speculative product implementation: empty database entities, service skeletons, build outputs, environment configuration, and scripts are ready. Later phases can evolve schemas and add dependencies as implementation details become clear, but reuse existing setup; the approved Phase 1 PostgreSQL addition is the explicit exception to the original no-extra-database decision.
 
 Keep this document high-level. Resolve algorithms, schemas, exact package versions, UI design, and task breakdowns in `docs/requirements/phase N/PLAN.md` before implementing that phase. Never permit configuration mutation without explicit publisher approval; label all synthetic earnings as estimated revenue.
 
 ## Confirmed decisions
 
-- Phase 1 is a read-only investigation agent: real streaming chat and publisher-scoped tool functions over tiny fixtures, with backend user authentication.
+- Phase 1 implements persistent read-only streaming investigations over tiny fixtures, with stateless backend authentication, PostgreSQL/Drizzle conversations, LangGraph checkpoints and explicit authorized resume.
 - Tools/functions are first-class; MCP is an optional future export adapter, not an agent dependency.
 - TypeScript end-to-end: pnpm monorepo, React dashboard, and one Node backend hosting agent, user, and configuration modules.
 - Seed the database rather than collecting live Prebid events; no injection or ingestion implementation is planned.
@@ -78,16 +78,15 @@ Keep this document high-level. Resolve algorithms, schemas, exact package versio
 
 ### Phase 1 — Working read-only agent
 
-**Outcome:** the user can chat with an actual investigating agent in the browser.
+**Outcome:** implemented authenticated browser chat with a bounded LangGraph/OpenAI SDK investigation agent.
 
-- [ ] Implement the backend user module: credential verification, login/logout, server-validated sessions, and publisher membership resolution. Explicitly bootstrap minimal development users for the two publishers; a publisher selector may select only authorized memberships.
-- [ ] Add login UI, a minimal chat screen, streaming responses, cancellation, and visible tool-execution status/results.
-- [ ] Implement the real model/tool loop with turn/tool budgets, timeouts, structured validation, and explicit failure handling.
-- [ ] Define publisher-scoped tools for performance summary, period comparison, bidder performance, current configuration, and configuration history; dispatch their TypeScript functions directly from the agent with authenticated context. No MCP client/server is required.
-- [ ] Use a tiny checked-in fixture behind those tools. It is explicitly demo data, not the 6–8-week generator or a hidden set of expected answers. Include enough observations to demonstrate multiple tool calls.
-- [ ] Require evidence references in answers; distinguish observed metrics from hypotheses. Do not expose mutation tools.
+- [x] Argon2id development users/publisher metadata/memberships explicitly bootstrapped in DynamoDB; stateless signed cookies, no session storage, one publisher per user.
+- [x] Bare login/chat UI with streamed provisional/final findings, Stop, tool results/evidence and saved reload.
+- [x] Five validated publisher-scoped read-only tools over tiny fixed demo fixtures; no mutation tools or historical generator.
+- [x] PostgreSQL/Drizzle conversation records and official LangGraph checkpoints with fenced execution leases, cumulative budgets, explicit resume and terminal projection recovery.
+- [x] Actual SDK/mock-HTTP multi-tool integration and real database/browser flows verify isolation, persistence, cancellation, evidence and failure handling; no private chain-of-thought displayed.
 
-**Exit gate:** an authenticated browser question such as “What changed in my performance?” produces streamed findings supported by multiple actual tool-function calls. Login/logout and session checks work; Publisher A cannot retrieve Publisher B data; API-key leakage, tool errors, and incompatible endpoints are handled visibly. No raw chain-of-thought is displayed.
+**Verification:** 56 regression tests, 15 integration tests and seven Chromium checks passed; see `docs/requirements/phase 1/VERIFICATION.md`. New live-agent smoke was skipped because current private model-key settings were incomplete. Prior audited probe success is not presented as a new live agent test. Public demo-only accounts/setup are in the phase's `DEMO-ACCOUNTS.md`.
 
 ### Phase 2 — Persisted seed data and user configuration management
 
@@ -207,4 +206,4 @@ Use each phase's exit gate as its acceptance checklist. Phase-specific plans and
 
 ## Out of scope
 
-AWS deployment, cloud provisioning, CI/CD, model hosting, external identity-provider integration, live Prebid capture, injected scripts, ingestion endpoints, paid-revenue attribution, live-site deployment automation, predictive optimization, Redis/extra databases, and MCP-first execution. Backend user authentication and configuration editing are in scope. Optional MCP exports are deferred until requested and must reuse function/domain contracts. This is a seed-driven local agent implementation, not a complete implementation of the brief's live collector, Lambda deployment, or MCP transport requirements.
+AWS deployment, cloud provisioning, CI/CD, model hosting, external identity-provider integration, live Prebid capture, injected scripts, ingestion endpoints, paid-revenue attribution, live-site deployment automation, predictive optimization, Redis/other unplanned databases, and MCP-first execution. Backend user authentication and configuration editing are in scope. Optional MCP exports are deferred until requested and must reuse function/domain contracts. This is a seed-driven local agent implementation, not a complete implementation of the brief's live collector, Lambda deployment, or MCP transport requirements.

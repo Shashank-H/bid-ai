@@ -15,7 +15,7 @@ it('prints command help without needing configuration and rejects unknown comman
 });
 
 it('future commands fail visibly with the correct owning phase and never write data', async () => {
-  for (const [command, phase] of [['users:bootstrap', 1], ['data:seed', 2], ['data:reconcile', 2], ['data:generate', 3]] as const) {
+  for (const [command, phase] of [['data:seed', 2], ['data:reconcile', 2], ['data:generate', 3]] as const) {
     const result = await call([command]);
 
     expect(result.code).toBe(1);
@@ -34,6 +34,14 @@ it('rejects destructive or invalid configuration before any database request', a
 
   expect(result.code).toBe(1);
   expect(result.text).not.toContain('sentinel');
+});
+
+it('refuses user bootstrap without private passwords and never reports placeholder success', async () => {
+  const result = await call(['users:bootstrap']);
+
+  expect(result.code).toBe(1);
+  expect(result.text).not.toContain('NOT_IMPLEMENTED');
+  expect(result.text).not.toContain('DEMO_PASSWORD');
 });
 
 it('requires private model settings only for the explicit probe command', async () => {

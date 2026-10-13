@@ -36,3 +36,43 @@ button:disabled { cursor: wait; color: #526171; background: #e3e8ed; border-colo
 @media (max-width: 35rem) { .foundation { padding: 2rem 1rem; } .status-panel { padding: 1rem; } }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; } }
+
+.app { max-width: 76rem; margin: 0 auto; padding: 2rem 1.5rem; }
+.app-header { display: flex; justify-content: space-between; gap: 1.5rem; align-items: flex-start; }
+.chat-layout { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 1rem; }
+.chat-layout .status-panel { margin: 1rem 0; }
+.login-form { display: grid; gap: .65rem; max-width: 26rem; }
+input, textarea { font: inherit; color: inherit; border: 1px solid var(--border); border-radius: .4rem; padding: .65rem; width: 100%; background: #fff; }
+input:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid #267cc1; outline-offset: 3px; }
+input:disabled, textarea:disabled { background: #e3e8ed; }
+.secondary { color: var(--accent); background: #fff; }
+.secondary:hover:not(:disabled) { color: #fff; }
+.secondary[aria-current] { border-color: #267cc1; background: #e9f1f8; }
+.conversations ul { list-style: none; padding: 0; display: grid; gap: .5rem; }
+.conversations li button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+.error { color: #9a2e1d; font-weight: 600; }
+.message-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.turn { border-top: 1px solid var(--border); padding: 1rem 0; }
+.turn h3 { font-size: .9rem; margin: .5rem 0; color: var(--muted); }
+
+@media (max-width: 50rem) {
+  .chat-layout { grid-template-columns: minmax(0, 1fr); }
+  .app { padding: 1rem; }
+  .app-header { flex-wrap: wrap; }
+}
+
+.composer { border-top: 1px solid var(--border); padding-top: 1rem; }
+.composer label { display: block; font-weight: 650; margin-bottom: .5rem; }
+.composer .actions { margin-top: .75rem; }
+
+.tool-card { border: 1px solid var(--border); border-radius: .4rem; padding: .7rem; margin: .5rem 0; }
+summary { cursor: pointer; font-weight: 650; overflow-wrap: anywhere; }
+summary:hover { color: var(--accent); }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f4f6f8; padding: .7rem; font-size: .8rem; }
+h4 { margin-bottom: .4rem; font-size: .9rem; }
+.evidence { border-top: 1px solid var(--border); padding: .5rem 0; }
+.evidence:focus { outline: 3px solid #267cc1; outline-offset: 2px; }
+dl { font-size: .85rem; }
+dt { font-weight: 650; }
+dd { margin: 0 0 .5rem; overflow-wrap: anywhere; }
+a { color: #163c63; overflow-wrap: anywhere; }

@@ -1,4 +1,4 @@
-import type { BidderMetrics, Configuration, ConfigurationHistory, DailyMetrics, PeriodInput, PublisherMembership, Session, ToolResult, User } from '@bid/shared';
+import type { BidderMetrics, Configuration, ConfigurationHistory, DailyMetrics, PeriodInput, PublisherMembership, ToolResult, User } from '@bid/shared';
 
 // Only the future server authorization resolver may establish this opaque brand.
 // There is intentionally no JSON parser or public constructor for trusted context.
@@ -17,13 +17,8 @@ export interface ExecutionContext {
 
 export interface UserRepository {
   findByLogin(login: string): Promise<User | null>;
+  findById(userId: string): Promise<User | null>;
   memberships(userId: string): Promise<readonly PublisherMembership[]>;
-}
-
-export interface SessionRepository {
-  findByTokenHash(tokenHash: string): Promise<Session | null>;
-  create(session: Session): Promise<void>;
-  deleteByTokenHash(tokenHash: string): Promise<void>;
 }
 
 export interface AnalyticsRepository {
