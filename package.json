@@ -19,7 +19,8 @@
     "users:bootstrap": "pnpm --filter @bid/api users:bootstrap",
     "data:seed": "pnpm --filter @bid/api data:seed",
     "data:generate": "pnpm --filter @bid/api data:generate",
-    "data:reconcile": "pnpm --filter @bid/api data:reconcile"
+    "data:reconcile": "pnpm --filter @bid/api data:reconcile",
+    "postgres:init": "pnpm --filter @bid/api postgres:init"
   },
   "devDependencies": {
     "typescript": "5.9.3",

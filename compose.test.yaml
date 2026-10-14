@@ -3,7 +3,7 @@
 # docker compose -f compose.yaml -f compose.test.yaml run --rm --no-deps api pnpm test
 services:
   api:
-    image: bid-intelligence-api-test:phase0
+    image: bid-intelligence-api-test:phase1
     build:
       target: test
     working_dir: /workspace
@@ -11,7 +11,7 @@ services:
     healthcheck:
       disable: true
   web:
-    image: bid-intelligence-web-test:phase0
+    image: bid-intelligence-web-test:phase1
     build:
       target: test
     working_dir: /workspace

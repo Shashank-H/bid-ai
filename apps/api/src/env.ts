@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { localEndpoint, TablePrefixSchema } from './db/client.js';
 import type { DatabaseSettings } from './db/client.js';
+import type { AuthSettings } from './auth/token.js';
 
 export class ConfigurationError extends Error {
   constructor() {
@@ -55,6 +56,21 @@ export function readEnvironment(env: NodeJS.ProcessEnv = process.env) {
   });
 }
 
+/** Explicit values override the stable local-demo signing default. */
+export function readAuthSettings(env: NodeJS.ProcessEnv = process.env): AuthSettings {
+  return safeRead(() => {
+    const runtime = readEnvironment(env);
+    const secret = z.string().min(32).max(1024).parse(env['AUTH_SIGNING_SECRET']);
+    const origin = z.string().url().parse(env['APP_ORIGIN'] ?? `http://localhost:${runtime.hostPorts.web}`);
+    const url = new URL(origin);
+
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+      || url.origin !== origin || Buffer.byteLength(secret) < 32) throw new Error('Invalid auth configuration');
+
+    return { ...runtime.session, secret, origin };
+  });
+}
+
 export type TracingSettings = { enabled: false } | {
   enabled: true;
   baseURL: string;
@@ -95,11 +111,24 @@ export function readTracingSettings(env: NodeJS.ProcessEnv = process.env): Traci
   });
 }
 
+export function readAgentSettings(env: NodeJS.ProcessEnv = process.env) {
+  return safeRead(() => {
+    const values = z.object({
+      AGENT_DEADLINE_MS: z.coerce.number().int().min(1000).max(110000).default(110000),
+      AGENT_MAX_COMPLETION_TOKENS: z.coerce.number().int().min(64).max(8192).default(4096),
+    }).parse(env);
+
+    return { deadlineMs: values.AGENT_DEADLINE_MS, maxCompletionTokens: values.AGENT_MAX_COMPLETION_TOKENS };
+  });
+}
+
 export interface ModelSettings {
   baseURL: string;
   apiKey: string;
   model: string;
   timeoutMs: number;
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high';
+  temperature?: number;
   maxCompletionTokens?: number;
   maxOutputBytes?: number;
 }
@@ -111,7 +140,9 @@ export function readModelSettings(env: NodeJS.ProcessEnv = process.env): ModelSe
       LLM_BASE_URL: z.string().url().max(2048),
       LLM_API_KEY: z.string().min(1).max(4096),
       LLM_MODEL: z.string().trim().min(1).max(256),
-      LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+      LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(110000),
+      LLM_REASONING_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high']).optional(),
+      LLM_TEMPERATURE: z.coerce.number().min(0).max(2).optional(),
       LLM_PROBE_MAX_TOKENS: z.preprocess((value) => value === '' ? undefined : value,
         z.coerce.number().int().min(64).max(1024).optional()),
       LLM_PROBE_MAX_OUTPUT_BYTES: z.preprocess((value) => value === '' ? undefined : value,
@@ -129,6 +160,8 @@ export function readModelSettings(env: NodeJS.ProcessEnv = process.env): ModelSe
       apiKey: values.LLM_API_KEY,
       model: values.LLM_MODEL,
       timeoutMs: values.LLM_TIMEOUT_MS,
+      ...(values.LLM_REASONING_EFFORT === undefined ? {} : { reasoningEffort: values.LLM_REASONING_EFFORT }),
+      ...(values.LLM_TEMPERATURE === undefined ? {} : { temperature: values.LLM_TEMPERATURE }),
       ...(values.LLM_PROBE_MAX_TOKENS === undefined ? {} : { maxCompletionTokens: values.LLM_PROBE_MAX_TOKENS }),
       ...(values.LLM_PROBE_MAX_OUTPUT_BYTES === undefined ? {} : { maxOutputBytes: values.LLM_PROBE_MAX_OUTPUT_BYTES }),
     };

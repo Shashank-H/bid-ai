@@ -4,3 +4,6 @@ export * from './identity.js';
 export * from './auction.js';
 export * from './configuration.js';
 export * from './protocol.js';
+
+export * from './analytics.js';
+export * from './conversation.js';

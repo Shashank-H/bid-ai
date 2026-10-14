@@ -10,14 +10,15 @@ const help = `Foundation commands:
   db:verify --record read|delete --token <uuid>
   db:reset --endpoint <local-url> --prefix <configured-prefix> --confirm "DELETE <prefix>"
   model:probe                     Probe configured streaming and function-call support
-  users:bootstrap                 Phase 1 placeholder; returns NOT_IMPLEMENTED
+  users:bootstrap                 Explicit repeat-safe development-user initialization
+  postgres:init                   Apply application and LangGraph saver migrations
   data:seed | data:reconcile       Phase 2 placeholders; return NOT_IMPLEMENTED
   data:generate                   Phase 3 placeholder; returns NOT_IMPLEMENTED
 
 No data is loaded during ordinary startup. Model settings stay server-side.
 `;
 
-const commands = ['db:init', 'db:verify', 'db:reset', 'model:probe', ...Object.keys(deferredCommands)];
+const commands = ['db:init', 'db:verify', 'db:reset', 'model:probe', 'users:bootstrap', 'postgres:init', ...Object.keys(deferredCommands)];
 
 export async function runCli(args: readonly string[], env: NodeJS.ProcessEnv = process.env,
   output: (message: string) => void = console.log): Promise<number> {
@@ -68,6 +69,16 @@ export async function runCli(args: readonly string[], env: NodeJS.ProcessEnv = p
         // Short-lived commands must flush queued observations before they exit.
         await tracing.shutdown();
       }
+    } else if (command === 'postgres:init') {
+      parseOptions(options, []);
+
+      const { initializePostgres } = await import('./postgres-init.js');
+      output(JSON.stringify(await initializePostgres(env)));
+    } else if (command === 'users:bootstrap') {
+      parseOptions(options, []);
+
+      const { bootstrapUsers } = await import('./users-bootstrap.js');
+      output(JSON.stringify(await bootstrapUsers(env)));
     } else {
       output(JSON.stringify(await executeDatabaseCommand(command, options, env)));
     }
@@ -91,7 +102,7 @@ export async function runCli(args: readonly string[], env: NodeJS.ProcessEnv = p
     }
 
     // SDK/provider payloads are intentionally never printed by operational commands.
-    const message = error instanceof Error && /^(RESET_REFUSED|INVALID_ARGUMENTS|INCOMPATIBLE_SCHEMA|INCOMPATIBLE_TTL|TTL_TRANSITION_PENDING|INVALID_VERIFICATION_TOKEN|DATABASE_NOT_READY):?/.test(error.message)
+    const message = error instanceof Error && /^(RESET_REFUSED|INVALID_ARGUMENTS|INCOMPATIBLE_SCHEMA|INCOMPATIBLE_TTL|TTL_TRANSITION_PENDING|INVALID_VERIFICATION_TOKEN|BOOTSTRAP_CONFLICT|DATABASE_NOT_READY):?/.test(error.message)
       ? error.message : 'COMMAND_FAILED: check local configuration and dependency readiness';
     output(message);
 

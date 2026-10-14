@@ -75,6 +75,57 @@ describe('OpenAI-compatible model diagnostic', () => {
     });
   });
 
+  it('accepts repeated finish markers in usage trailers for all three requests', async () => {
+    const withUsage = (finish: string, delta: Record<string, unknown>) => () => sse([
+      chunk(delta), chunk({}, finish),
+      { ...chunk({ content: '', role: 'assistant' }, finish), usage: { total_tokens: 10 } },
+    ]);
+    const { fetcher } = script([
+      withUsage('stop', { content: 'streaming works' }),
+      withUsage('tool_calls', { tool_calls: [{ index: 0, id: 'call_echo', type: 'function',
+        function: { name: 'probe_echo', arguments: '{"message":"compatibility check"}' } }] }),
+      withUsage('stop', { content: 'received tool result' }),
+    ]);
+
+    await expect(runModelProbe({ ...options, fetch: fetcher })).resolves.toMatchObject({ compatible: true });
+  });
+
+  it.each([
+    chunk({ content: 'late content' }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: '{}' } }] }),
+    chunk({}, 'tool_calls'),
+  ])('rejects actual content or conflicting completion after finishing', async (trailer) => {
+    const { fetcher } = script([() => sse([chunk({ content: 'answer' }), chunk({}, 'stop'), trailer])]);
+
+    await expectCode(runModelProbe({ ...options, fetch: fetcher }), 'MODEL_PROTOCOL_INVALID');
+  });
+
+  it('uses max_completion_tokens on the official OpenAI endpoint for all probe requests', async () => {
+    const { fetcher, bodies } = script([text, call, text]);
+    await runModelProbe({ ...options, baseURL: 'https://api.openai.com/v1', fetch: fetcher });
+
+    expect(bodies.map((request) => request['max_completion_tokens'])).toEqual([64, 128, 64]);
+    expect(bodies.every((request) => request['max_tokens'] === undefined)).toBe(true);
+  });
+
+  it('forwards configured reasoning and temperature settings on every probe request', async () => {
+    const { fetcher, bodies } = script([text, call, text]);
+    await runModelProbe({ ...options, fetch: fetcher, reasoningEffort: 'none', temperature: 0 });
+
+    expect(bodies).toHaveLength(3);
+    for (const body of bodies) expect(body).toMatchObject({ reasoning_effort: 'none', temperature: 0 });
+  });
+
+  it('omits optional model settings when not configured', async () => {
+    const { fetcher, bodies } = script([text, call, text]);
+    await runModelProbe({ ...options, fetch: fetcher });
+
+    for (const body of bodies) {
+      expect(body).not.toHaveProperty('reasoning_effort');
+      expect(body).not.toHaveProperty('temperature');
+    }
+  });
+
   it('supports explicit bounded completion allowances without changing finish validation', async () => {
     const { fetcher, bodies } = script([text, call, text]);
 

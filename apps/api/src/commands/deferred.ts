@@ -1,5 +1,4 @@
 export const deferredCommands = {
-  'users:bootstrap': 1,
   'data:seed': 2,
   'data:reconcile': 2,
   'data:generate': 3,

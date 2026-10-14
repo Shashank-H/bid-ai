@@ -23,7 +23,6 @@ const MetricFields = {
   publisherId: IdSchema,
   date: DateSchema,
   currency: CurrencySchema,
-  synthetic: z.boolean(),
   estimatedRevenue: AmountSchema,
 };
 
