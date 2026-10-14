@@ -2,7 +2,8 @@ import { createServer } from 'node:http';
 import type { Server } from 'node:http';
 import { once } from 'node:events';
 import { spawn } from 'node:child_process';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import OpenAI from 'openai';
 import { trace } from '@opentelemetry/api';
 import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import type { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
@@ -10,6 +11,9 @@ import { initializeTracing, maskTraceData } from './tracing.js';
 import type { TracingRuntime } from './tracing.js';
 import { ConfigurationError, readTracingSettings } from '../env.js';
 import { runModelProbe } from '../commands/model-probe.js';
+import { HttpError } from '../errors.js';
+import { modelRunner } from '../agent/model.js';
+import { initialState } from '../agent/state.js';
 
 type WireSpan = {
   name: string;
@@ -106,6 +110,18 @@ it('masks nested credentials, private reasoning, JSON tool arguments and configu
   expect(text).not.toContain('unfinished-private');
   expect(text).toContain('safe');
   expect(text).toContain('[REDACTED]');
+});
+
+it('retains reasoning effort, token counts and sampling settings while masking private reasoning', () => {
+  const masked = maskTraceData({ reasoningEffort: 'none', reasoning_effort: 'low', temperature: 0.2,
+    usage: { completion_tokens_details: { reasoning_tokens: 42 } }, reasoning_content: 'private chain',
+    thinking: 'private chain', analysis: 'private chain' });
+
+  expect(masked).toMatchObject({ reasoningEffort: 'none', reasoning_effort: 'low', temperature: 0.2,
+    usage: { completion_tokens_details: { reasoning_tokens: 42 } }, reasoning_content: '[REDACTED]',
+    thinking: '[REDACTED]', analysis: '[REDACTED]' });
+  expect(maskTraceData({ reasoning_effort: 'private chain', reasoning_tokens: 'private chain' }))
+    .toEqual({ reasoning_effort: '[REDACTED]', reasoning_tokens: '[REDACTED]' });
 });
 
 it('fails closed for tracing when another provider owns global export', async () => {
@@ -230,7 +246,103 @@ describe('actual Langfuse OTLP export', () => {
     expect(body).not.toContain(publicKey);
     expect(body).not.toContain('somebody@example.test');
     expect(body).not.toContain('private chain of thought');
-    expect(body).not.toContain('llama.invalid');
+    expect(attribute(children[0]!, 'langfuse.observation.metadata.endpoint')).toBe(options.baseURL);
+  });
+
+  it('records request context and structured HTTP errors before any model output exists', async () => {
+    const start = allSpans().length;
+    const client = new OpenAI({ baseURL: options.baseURL, apiKey: secret, maxRetries: 0,
+      fetch: async () => new Response(JSON.stringify({ error: { code: 'unsupported_parameter', type: 'invalid_request_error',
+        param: 'max_tokens', message: `Use max_completion_tokens, not max_tokens. ${secret}` } }),
+      { status: 400, headers: { 'content-type': 'application/json', 'x-request-id': 'req-diagnostic-test' } }) });
+
+    await expect(tracing.turn({ conversationId: 'conversation-diagnostics', turnId: 'turn-diagnostics', publisherId: 'publisher-a' },
+      () => tracing.generation('failed-request', client, async (observed) => {
+        await observed.chat.completions.create({ model: 'reasoning-model', messages: [{ role: 'user', content: 'hello' }],
+          stream: true, max_tokens: 64, reasoning_effort: 'low', temperature: 0 });
+      }))).rejects.toMatchObject({ status: 400 });
+    await tracing.flush();
+
+    const spans = allSpans().slice(start);
+    expect(spans).toHaveLength(2);
+    const generation = spans.find((span) => span.name === 'failed-request')!;
+    expect(attribute(generation, 'langfuse.observation.level')).toBe('ERROR');
+    expect(attribute(generation, 'langfuse.observation.model.name')).toBe('reasoning-model');
+    expect(attribute(generation, 'langfuse.observation.model.parameters')).toContain('"reasoning_effort":"low"');
+    expect(attribute(generation, 'langfuse.observation.model.parameters')).toContain('"temperature":0');
+    expect(attribute(generation, 'langfuse.observation.input')).toContain('hello');
+    expect(attribute(generation, 'langfuse.observation.output')).toContain('unsupported_parameter');
+    expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain('req-diagnostic-test');
+    expect(attribute(generation, 'langfuse.observation.status_message')).toContain('max_completion_tokens');
+    expect(JSON.stringify(spans)).not.toContain(secret);
+    expect(JSON.stringify(spans)).not.toContain(secretKey);
+  });
+
+  it('exports full model-runner failure context on the agent generation and root, not application logs', async () => {
+    const start = allSpans().length;
+    const appLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const modelServer = createServer((_request, response) => {
+      response.writeHead(400, { 'content-type': 'application/json', 'x-request-id': 'req-model-runner' });
+      response.end(JSON.stringify({ error: { code: 'unsupported_parameter', type: 'invalid_request_error', param: 'max_tokens',
+        message: `Unsupported max_tokens. ${secret}` } }));
+    });
+    modelServer.listen(0, '127.0.0.1');
+    await once(modelServer, 'listening');
+
+    try {
+      const address = modelServer.address();
+      if (!address || typeof address === 'string') throw new Error('Test provider address unavailable');
+      const run = modelRunner({ LLM_BASE_URL: `http://127.0.0.1:${address.port}/v1`, LLM_API_KEY: secret,
+        LLM_MODEL: 'test-model' }, tracing);
+      await expect(tracing.turn({ conversationId: 'agent-conversation', turnId: 'agent-turn', publisherId: 'publisher-a' },
+        () => run(initialState('agent-turn', [{ role: 'user', content: 'Inspect my revenue.' }]), new AbortController().signal, () => {},
+          { conversationId: 'agent-conversation', turnId: 'agent-turn', correlationId: 'test-correlation' })))
+        .rejects.toMatchObject({ code: 'MODEL_INCOMPATIBLE', diagnostics: { stage: 'request', httpStatus: 400 } });
+      await tracing.flush();
+
+      const spans = allSpans().slice(start);
+      expect(spans.map((span) => span.name).sort()).toEqual(['investigation-model', 'publisher-investigation']);
+      expect(spans.every((span) => attribute(span, 'langfuse.observation.level') === 'ERROR')).toBe(true);
+      const generation = spans.find((span) => span.name === 'investigation-model')!;
+      const root = spans.find((span) => span.name === 'publisher-investigation')!;
+      expect(generation.parentSpanId).toBe(root.spanId);
+      expect(attribute(generation, 'langfuse.observation.model.name')).toBe('test-model');
+      expect(attribute(generation, 'langfuse.observation.input')).toContain('Inspect my revenue.');
+      expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain('req-model-runner');
+      expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain('test-correlation');
+      expect(attribute(root, 'langfuse.observation.output')).toContain('unsupported_parameter');
+      expect(attribute(root, 'langfuse.observation.output')).not.toContain('"finished":true');
+      expect(JSON.stringify(spans)).not.toContain(secret);
+      expect(appLog).toHaveBeenCalled();
+      expect(JSON.stringify(appLog.mock.calls)).not.toContain(secret);
+    } finally {
+      appLog.mockRestore();
+      modelServer.close();
+      modelServer.closeAllConnections();
+    }
+  });
+
+  it('retains partial output and usage when application validation rejects a completed stream', async () => {
+    const start = allSpans().length;
+    const client = new OpenAI({ baseURL: options.baseURL, apiKey: secret, maxRetries: 0,
+      fetch: async () => sse([chunk({ content: `partial ${secret}` }), chunk({}, 'length'),
+        { choices: [], usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 } }]) });
+    const error = new HttpError(502, 'MODEL_INCOMPATIBLE', 'Completion was truncated.');
+
+    await expect(tracing.generation('failed-validation', client, async (observed) => {
+      const stream = await observed.chat.completions.create({ model: options.model, messages: [{ role: 'user', content: 'hello' }], stream: true });
+      for await (const _chunk of stream) { /* Consume before validating the finish reason. */ }
+      throw error;
+    })).rejects.toBe(error);
+    await tracing.flush();
+
+    const generation = allSpans().slice(start).find((span) => span.name === 'failed-validation')!;
+    expect(attribute(generation, 'langfuse.observation.level')).toBe('ERROR');
+    expect(attribute(generation, 'langfuse.observation.output')).toContain('partial');
+    expect(attribute(generation, 'langfuse.observation.metadata.finishReason')).toBe('length');
+    expect(attribute(generation, 'langfuse.observation.usage_details')).toContain('7');
+    expect(attribute(generation, 'langfuse.observation.status_message')).toContain('Completion was truncated');
+    expect(JSON.stringify(generation)).not.toContain(secret);
   });
 
   it('keeps valid empty tool-call arrays compatible with and without tracing', async () => {
@@ -260,6 +372,18 @@ describe('actual Langfuse OTLP export', () => {
     await tracing.flush();
   });
 
+  it('does not send application HTTP/auth/database spans to Langfuse', async () => {
+    const start = allSpans().length;
+    for (const name of ['http-request', 'auth-login', 'database-query', 'application-startup']) {
+      const span = trace.getTracer('application').startSpan(name);
+      span.setAttribute('application.message', 'application logs stay local');
+      span.end();
+    }
+    await tracing.flush();
+
+    expect(allSpans().slice(start)).toHaveLength(0);
+  });
+
   it('leaves missing usage/cost absent rather than inventing Llama metrics', async () => {
     const start = allSpans().length;
     await runModelProbe({ ...options, tracing, fetch: scriptedFetch(false) });
@@ -276,7 +400,7 @@ describe('actual Langfuse OTLP export', () => {
 
   it('sanitizes provider errors and closes aborted/invalid streaming generations', async () => {
     const start = allSpans().length;
-    const failureFetch: typeof fetch = async () => new Response(`{"error":{"message":"Bearer ${secret}; raw-provider-private"}}`, {
+    const failureFetch: typeof fetch = async () => new Response(`{"error":{"message":"Bearer ${secret}; provider rejected credentials"}}`, {
       status: 401, headers: { 'content-type': 'application/json' },
     });
 
@@ -285,7 +409,7 @@ describe('actual Langfuse OTLP export', () => {
 
     const failureSpans = allSpans().slice(start);
     expect(failureSpans).toHaveLength(2);
-    expect(JSON.stringify(failureSpans)).not.toContain('raw-provider-private');
+    expect(JSON.stringify(failureSpans)).toContain('provider rejected credentials');
     expect(JSON.stringify(failureSpans)).not.toContain(secret);
 
     const malformedStart = allSpans().length;

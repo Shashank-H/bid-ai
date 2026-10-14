@@ -6,16 +6,16 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import type { ReadableSpan, Span, SpanExporter, SpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { isLangfuseSpan, LangfuseSpanProcessor } from '@langfuse/otel';
 import { configureGlobalLogger, LogLevel } from '@langfuse/core';
-import { observeOpenAI } from '@langfuse/openai';
 import { getActiveTraceId, getLangfuseTracerProvider, propagateAttributes, startActiveObservation } from '@langfuse/tracing';
 import type OpenAI from 'openai';
 import type { TracingSettings } from '../env.js';
+import { diagnosticEndpoint, errorDiagnostics } from './diagnostics.js';
 
 export interface TracingRuntime {
   readonly enabled: boolean;
   readonly traceId: string | undefined;
   probe<T>(operation: () => Promise<T>): Promise<T>;
-  generation<T>(name: string, client: OpenAI, operation: (client: OpenAI) => Promise<T>): Promise<T>;
+  generation<T>(name: string, client: OpenAI, operation: (client: OpenAI) => Promise<T>, context?: Record<string, unknown>): Promise<T>;
   tool<T>(input: unknown, operation: () => T | Promise<T>, name?: string): Promise<T>;
   turn<T>(input: { conversationId: string; turnId: string; publisherId: string }, operation: () => Promise<T>): Promise<T>;
   flush(): Promise<void>;
@@ -33,70 +33,33 @@ const disabledTracing: TracingRuntime = {
   shutdown: async () => {},
 };
 
-const generationScope = createContextKey('bid-generation-scope');
-const originalChunk = Symbol('original-stream-chunk');
-
-function isIterable(value: unknown): value is AsyncIterable<unknown> {
-  return value !== null && typeof value === 'object' && Symbol.asyncIterator in value;
+function record(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function normalizeIntegrationStream(value: unknown): unknown {
-  if (!isIterable(value)) return value;
-
-  return (async function* () {
-    for await (const chunk of value) {
-      if (chunk === null || typeof chunk !== 'object' || !('choices' in chunk) || !Array.isArray(chunk.choices)) {
-        yield chunk;
-        continue;
-      }
-
-      let changed = false;
-      const choices = chunk.choices.map((choice: unknown) => {
-        if (choice === null || typeof choice !== 'object' || !('delta' in choice)
-          || choice.delta === null || typeof choice.delta !== 'object' || !('tool_calls' in choice.delta)
-          || !Array.isArray(choice.delta.tool_calls) || choice.delta.tool_calls.length !== 0) return choice;
-
-        // SDK 5.13.1 treats an empty array as a real call and crashes aggregation.
-        // Normalize ONLY its view, then restore the original for application validation.
-        const { tool_calls: _empty, ...delta } = choice.delta;
-        changed = true;
-
-        return { ...choice, delta };
-      });
-
-      if (changed) {
-        const normalized = { ...chunk, choices };
-        Object.defineProperty(normalized, originalChunk, { value: chunk });
-        yield normalized;
-      } else {
-        yield chunk;
-      }
-    }
-  })();
-}
-
-function restoreApplicationStream(value: unknown): unknown {
-  if (!isIterable(value)) return value;
-
-  return (async function* () {
-    for await (const chunk of value) {
-      yield chunk !== null && typeof chunk === 'object' && originalChunk in chunk ? chunk[originalChunk] : chunk;
-    }
-  })();
-}
-
-function observedChatClient(client: OpenAI, name: string): OpenAI {
-  const observed = observeOpenAI({
-    create: (...args: Parameters<OpenAI['chat']['completions']['create']>) => client.chat.completions.create(...args)
-      .then(normalizeIntegrationStream),
-  }, { generationName: name });
+function observedChatClient(client: OpenAI, request: (input: Record<string, unknown>) => void,
+  receive: (chunk: unknown) => void): OpenAI {
   const view = Object.create(client) as OpenAI;
 
   Object.defineProperty(view, 'chat', { value: {
     ...client.chat,
     completions: {
       ...client.chat.completions,
-      create: (...args: Parameters<OpenAI['chat']['completions']['create']>) => observed.create(...args).then(restoreApplicationStream),
+      create: async (...args: Parameters<OpenAI['chat']['completions']['create']>) => {
+        request(record(args[0]));
+        const response = await client.chat.completions.create(...args);
+        if (response !== null && typeof response === 'object' && Symbol.asyncIterator in response) {
+          return (async function* () {
+            for await (const chunk of response) {
+              receive(chunk);
+              yield chunk; // Application validation always sees the provider's original chunk.
+            }
+          })();
+        }
+
+        receive(response);
+        return response;
+      },
     },
   } });
 
@@ -104,6 +67,14 @@ function observedChatClient(client: OpenAI, name: string): OpenAI {
 }
 
 const sensitiveKey = /api.?key|secret|password|authorization|credential|cookie|session.?token|access.?token|reasoning|thinking|chain.?of.?thought|analysis/i;
+
+function isSensitiveField(key: string, value: unknown): boolean {
+  if (/(?:^|\.)(reasoningEffort|reasoning_effort)$/.test(key) && typeof value === 'string'
+    && ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'].includes(value)) return false;
+  if (/(?:^|\.)reasoning_tokens$/.test(key) && typeof value === 'number' && Number.isFinite(value) && value >= 0) return false;
+
+  return sensitiveKey.test(key);
+}
 
 /** Defense in depth: SDK payload masking plus export-stage status/event sanitation. */
 export function maskTraceData(value: unknown, secrets: readonly string[] = []): unknown {
@@ -137,16 +108,17 @@ export function maskTraceData(value: unknown, secrets: readonly string[] = []): 
 
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
-      key, sensitiveKey.test(key) ? '[REDACTED]' : maskTraceData(entry, secrets),
+      key, isSensitiveField(key, entry) ? '[REDACTED]' : maskTraceData(entry, secrets),
     ]));
   }
 
   return value;
 }
 
-function safeErrorCode(error: unknown): string {
-  return error instanceof Error && /^MODEL_[A-Z_]+$/.test(error.message)
-    ? error.message : 'MODEL_REQUEST_FAILED';
+function errorStatus(error: unknown, secrets: string[]): string {
+  const details = errorDiagnostics(error, secrets);
+  return [details['code'], details['message']].filter((value) => typeof value === 'string').join(': ').slice(0, 1024)
+    || 'MODEL_REQUEST_FAILED';
 }
 
 function sanitizedSpan(span: ReadableSpan, secrets: readonly string[]): ReadableSpan {
@@ -155,15 +127,13 @@ function sanitizedSpan(span: ReadableSpan, secrets: readonly string[]): Readable
   for (const [key, value] of Object.entries(span.attributes)) {
     // Never export request URLs/headers or arbitrary third-party attributes/events.
     if (!key.startsWith('langfuse.') && !key.startsWith('gen_ai.')) continue;
-    if (sensitiveKey.test(key) || /cost_details/.test(key)) continue;
+    if (isSensitiveField(key, value) || /cost_details/.test(key)) continue;
 
-    attributes[key] = /status_message/.test(key)
-      ? (typeof value === 'string' && /^MODEL_[A-Z_]+$/.test(value) ? value : 'MODEL_REQUEST_FAILED')
-      : maskTraceData(value, secrets) as Attributes[string];
+    attributes[key] = maskTraceData(value, secrets) as Attributes[string];
   }
 
   const status: SpanStatus = span.status.message
-    ? { code: span.status.code, message: 'MODEL_REQUEST_FAILED' } : { code: span.status.code };
+    ? { code: span.status.code, message: maskTraceData(span.status.message, secrets) as string } : { code: span.status.code };
 
   return {
     ...span,
@@ -177,12 +147,12 @@ function sanitizedSpan(span: ReadableSpan, secrets: readonly string[]): Readable
 
 /** Sanitizes every exported span and closes integration spans on cancellation/errors. */
 class SafeSpanProcessor implements SpanProcessor {
-  readonly pending = new Map<string, { span: Span; scope: unknown }>();
+  readonly pending = new Map<string, { span: Span; fail?: (error: unknown) => void }>();
 
   constructor(private readonly processor: SpanProcessor, private readonly secrets: readonly string[]) {}
 
   onStart(span: Span, parentContext: Context): void {
-    this.pending.set(span.spanContext().spanId, { span, scope: parentContext.getValue(generationScope) });
+    this.pending.set(span.spanContext().spanId, { span });
     this.processor.onStart(span, parentContext);
   }
 
@@ -191,21 +161,15 @@ class SafeSpanProcessor implements SpanProcessor {
     this.processor.onEnd(sanitizedSpan(span, this.secrets));
   }
 
-  finishGeneration(parentId: string | undefined, name: string | undefined, error: unknown, scope?: symbol): void {
-    // The OpenAI integration currently leaves streaming generations open when consumers
-    // abort or the stream throws. End that same observation; do not create a duplicate.
+  finishGeneration(parentId: string | undefined, error: unknown): void {
+    // A probe deadline can win while an uncooperative provider stream is still open.
     for (const entry of this.pending.values()) {
       const { span } = entry;
       const readable = span as Span & ReadableSpan;
 
-      if ((scope === undefined || scope === entry.scope) && (name === undefined || readable.name === name)
-        && readable.parentSpanContext?.spanId === parentId
+      if (readable.parentSpanContext?.spanId === parentId
         && readable.attributes['langfuse.observation.type'] === 'generation') {
-        if (error !== undefined) {
-          span.setAttribute('langfuse.observation.level', 'ERROR');
-          span.setAttribute('langfuse.observation.status_message', safeErrorCode(error));
-        }
-
+        entry.fail?.(error);
         span.end();
       }
     }
@@ -323,7 +287,7 @@ export function initializeTracing(settings: TracingSettings, options: {
 
   return {
     enabled: true,
-    get traceId() { return traceId; },
+    get traceId() { return getActiveTraceId() ?? traceId; },
     probe: (operation) => propagateAttributes({
       traceName: 'model-compatibility-probe',
       tags: ['feature:model-probe'],
@@ -339,30 +303,88 @@ export function initializeTracing(settings: TracingSettings, options: {
       } catch (error) {
         // A deadline can win before an uncooperative stream finishes; close its
         // existing generation before the root observation leaves the active context.
-        processor.finishGeneration(trace.getSpan(context.active())?.spanContext().spanId, undefined, error);
-        span.update({ level: 'ERROR', statusMessage: safeErrorCode(error), output: { error: safeErrorCode(error) } });
+        processor.finishGeneration(trace.getSpan(context.active())?.spanContext().spanId, error);
+        span.update({ level: 'ERROR', statusMessage: errorStatus(error, secrets), output: { error: errorDiagnostics(error, secrets) } });
 
         throw error;
       }
     })),
-    generation: async (name, client, operation) => {
-      const parentId = trace.getSpan(context.active())?.spanContext().spanId;
-      const scope = Symbol('generation-invocation');
-      let failure: unknown;
+    generation: (name, client, operation, initial = {}) => startActiveObservation(name, async (generation) => {
+      // Own the observation until application validation finishes, not merely until SSE ends.
+      const metadata: Record<string, unknown> = { ...initial, endpoint: diagnosticEndpoint(client.baseURL) };
+      const calls = new Map<number, { id: string; type: string; function: { name: string; arguments: string } }>();
+      let content = '';
+      let completionStarted = false;
+      let usageDetails: Record<string, number> | undefined;
+      const output = () => ({ role: 'assistant', content: content || null,
+        ...(calls.size ? { tool_calls: [...calls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call) } : {}) });
+      const snapshot = () => ({ output: maskTraceData(output(), secrets), metadata: maskTraceData(metadata, secrets) as Record<string, unknown>,
+        ...(usageDetails ? { usageDetails } : {}) });
+      const fail = (error: unknown) => {
+        const details = errorDiagnostics(error, secrets);
+        generation.update({ ...snapshot(), level: 'ERROR', statusMessage: errorStatus(error, secrets),
+          output: { error: details, partialOutput: maskTraceData(output(), secrets) },
+          metadata: maskTraceData({ ...metadata, error: details }, secrets) as Record<string, unknown> });
+      };
+      const pending = processor.pending.get(trace.getSpan(context.active())?.spanContext().spanId ?? '');
+      if (pending) pending.fail = fail;
+      generation.update({ metadata: maskTraceData(metadata, secrets) as Record<string, unknown>,
+        ...(typeof initial['model'] === 'string' ? { model: initial['model'] } : {}) });
+
+      const request = (input: Record<string, unknown>) => {
+        const parameters = Object.fromEntries(Object.entries(input).filter(([key, value]) =>
+          !['model', 'messages', 'tools'].includes(key) && (typeof value === 'string' || typeof value === 'number'))) as Record<string, string | number>;
+        metadata['request'] = { ...input, messages: undefined, tools: undefined };
+        generation.update({ ...(typeof input['model'] === 'string' ? { model: input['model'] } : {}),
+          input: maskTraceData({ messages: input['messages'], tools: input['tools'] }, secrets),
+          modelParameters: maskTraceData(parameters, secrets) as Record<string, string | number>,
+          metadata: maskTraceData(metadata, secrets) as Record<string, unknown> });
+      };
+      const receive = (chunk: unknown) => {
+        const raw = record(chunk);
+        if (typeof raw['id'] === 'string') metadata['responseId'] = raw['id'];
+        if (typeof raw['model'] === 'string') metadata['responseModel'] = raw['model'];
+        const usage = record(raw['usage']);
+        if (Object.keys(usage).length) {
+          metadata['usage'] = usage;
+          usageDetails = {};
+          for (const [provider, field] of [['prompt_tokens', 'input'], ['completion_tokens', 'output'], ['total_tokens', 'total']] as const) {
+            if (typeof usage[provider] === 'number') usageDetails[field] = usage[provider];
+          }
+        }
+        const choice = record(Array.isArray(raw['choices']) ? raw['choices'][0] : undefined);
+        const delta = record(choice['delta'] ?? choice['message']);
+        if (choice['finish_reason'] != null) metadata['finishReason'] = choice['finish_reason'];
+        if (!completionStarted && (delta['content'] || Array.isArray(delta['tool_calls']) && delta['tool_calls'].length)) {
+          completionStarted = true;
+          generation.update({ completionStartTime: new Date() });
+        }
+        if (typeof delta['content'] === 'string') content = (content + delta['content']).slice(0, 65_536);
+        for (const fragment of Array.isArray(delta['tool_calls']) ? delta['tool_calls'] : []) {
+          const item = record(fragment);
+          const index = typeof item['index'] === 'number' ? item['index'] : 0;
+          if (index < 0 || index > 11) continue;
+          const call = calls.get(index) ?? { id: '', type: 'function', function: { name: '', arguments: '' } };
+          const fn = record(item['function']);
+          if (typeof item['id'] === 'string' && item['id'] !== call.id) call.id = (call.id + item['id']).slice(0, 128);
+          if (typeof fn['name'] === 'string' && fn['name'] !== call.function.name) call.function.name = (call.function.name + fn['name']).slice(0, 128);
+          if (typeof fn['arguments'] === 'string') call.function.arguments = (call.function.arguments + fn['arguments']).slice(0, 16_384);
+          calls.set(index, call);
+        }
+      };
 
       try {
-        return await context.with(context.active().setValue(generationScope, scope),
-          () => operation(observedChatClient(client, name)));
+        const result = await operation(observedChatClient(client, request, receive));
+        generation.update(snapshot());
+        return result;
       } catch (error) {
-        failure = error;
-
+        fail(error);
         throw error;
-      } finally {
-        processor.finishGeneration(parentId, name, failure, scope);
       }
-    },
+    }, { asType: 'generation' }),
     turn: (input, operation) => propagateAttributes({ traceName: 'publisher-investigation', sessionId: input.conversationId,
       tags: ['feature:investigation'] }, () => startActiveObservation('publisher-investigation', async (span) => {
+      traceId = getActiveTraceId();
       span.update({ input });
 
       try {
@@ -371,16 +393,20 @@ export function initializeTracing(settings: TracingSettings, options: {
 
         return result;
       } catch (error) {
-        span.update({ level: 'ERROR', statusMessage: safeErrorCode(error), output: { error: safeErrorCode(error) } });
+        span.update({ level: 'ERROR', statusMessage: errorStatus(error, secrets), output: { error: errorDiagnostics(error, secrets) } });
         throw error;
       }
     })),
     tool: (input, operation, name = 'execute-probe-echo') => startActiveObservation(name, async (span) => {
       span.update({ input });
-      const output = await operation();
-      span.update({ output });
-
-      return output;
+      try {
+        const output = await operation();
+        span.update({ output });
+        return output;
+      } catch (error) {
+        span.update({ level: 'ERROR', statusMessage: errorStatus(error, secrets), output: { error: errorDiagnostics(error, secrets) } });
+        throw error;
+      }
     }, { asType: 'tool' }),
     flush: () => bounded(() => processor.forceFlush(), settings.timeoutMs),
     shutdown: () => {

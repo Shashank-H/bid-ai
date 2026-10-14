@@ -2,6 +2,8 @@ import OpenAI from 'openai';
 import type { ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { z } from 'zod';
 import type { TracingRuntime } from '../observability/tracing.js';
+import { completionLimit, modelTuning } from '../model-parameters.js';
+import type { ModelSettings } from '../env.js';
 
 export type ModelProbeErrorCode =
   | 'MODEL_CONFIGURATION_INVALID' | 'MODEL_AUTH_FAILED' | 'MODEL_NETWORK_FAILED'
@@ -17,7 +19,7 @@ export class ModelProbeError extends Error {
   }
 }
 
-export interface ModelProbeOptions {
+export interface ModelProbeOptions extends Pick<ModelSettings, 'reasoningEffort' | 'temperature'> {
   baseURL: string;
   apiKey: string;
   model: string;
@@ -135,10 +137,10 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
     state.phase = expected;
     responseType = null;
 
-    // The Langfuse wrapper returns a native Promise rather than OpenAI's APIPromise.
-    // Capture HTTP metadata in the fetch adapter instead of relying on .withResponse().
+    // Capture HTTP metadata in the fetch adapter so tracing does not depend on APIPromise extensions.
     const stream = await observedClient.chat.completions.create({
       ...params,
+      ...modelTuning(options),
       stream_options: { include_usage: true },
     }, { signal: controller.signal });
 
@@ -164,7 +166,15 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
 
       const choice = parsed.data.choices[0];
       if (!choice) continue; // Optional usage-only final chunk.
-      if (finish !== undefined) failure('MODEL_PROTOCOL_INVALID');
+      if (finish !== undefined) {
+        // OpenRouter may repeat the finished choice in its final usage trailer.
+        if (choice.delta.content || choice.delta.tool_calls?.length
+          || choice.finish_reason != null && choice.finish_reason !== finish) {
+          failure('MODEL_PROTOCOL_INVALID');
+        }
+
+        continue;
+      }
       if (choice.delta.content) text += choice.delta.content;
 
       const call = choice.delta.tool_calls?.[0];
@@ -201,7 +211,7 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
 
   const execute = async (): Promise<ModelProbeResult> => {
     await consume({
-      model: options.model, stream: true, max_tokens: options.maxCompletionTokens ?? 64,
+      model: options.model, stream: true, ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 64),
       messages: [{ role: 'user', content: 'Reply briefly with: streaming works.' }],
     }, 'text', 'streaming-check');
 
@@ -209,7 +219,7 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
       { role: 'user', content: 'Call probe_echo with message "compatibility check".' },
     ];
     const call = await consume({
-      model: options.model, stream: true, max_tokens: options.maxCompletionTokens ?? 128, messages, tools: [tool],
+      model: options.model, stream: true, ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 128), messages, tools: [tool],
       tool_choice: { type: 'function', function: { name: 'probe_echo' } },
     }, 'tool', 'tool-call-check');
 
@@ -234,7 +244,8 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
     }, { role: 'tool', tool_call_id: call.id, content: JSON.stringify(echoed) },
     { role: 'user', content: 'Briefly acknowledge receiving the tool result.' });
 
-    await consume({ model: options.model, stream: true, max_tokens: options.maxCompletionTokens ?? 64, messages }, 'text', 'tool-result-continuation');
+    await consume({ model: options.model, stream: true,
+      ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 64), messages }, 'text', 'tool-result-continuation');
 
     return { compatible: true, streaming: true, toolCalls: true, continuation: true };
   };

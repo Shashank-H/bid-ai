@@ -22,7 +22,10 @@ it('validates mode, port and session ranges without returning environment values
 it('accepts provider-neutral overrides but rejects unsafe URLs and invalid budgets', () => {
   const env = { LLM_BASE_URL: 'http://localhost:8081/v1', LLM_API_KEY: 'local-placeholder', LLM_MODEL: 'llama-demo' };
 
-  expect(readModelSettings(env)).toEqual({ baseURL: env.LLM_BASE_URL, apiKey: env.LLM_API_KEY, model: env.LLM_MODEL, timeoutMs: 110000, reasoningEffort: 'none', temperature: 0 });
+  // Do not send optional sampling/reasoning parameters unless explicitly configured.
+  expect(readModelSettings(env)).toEqual({ baseURL: env.LLM_BASE_URL, apiKey: env.LLM_API_KEY, model: env.LLM_MODEL, timeoutMs: 110000 });
+  expect(readModelSettings({ ...env, LLM_REASONING_EFFORT: 'none', LLM_TEMPERATURE: '0' }))
+    .toMatchObject({ reasoningEffort: 'none', temperature: 0 });
   expect(readModelSettings({ ...env, LLM_BASE_URL: 'https://api.openai.com/v1', LLM_MODEL: 'future-openai-model' }).baseURL).toBe('https://api.openai.com/v1');
   expect(readModelSettings({ ...env, LLM_PROBE_MAX_TOKENS: '512', LLM_PROBE_MAX_OUTPUT_BYTES: '262144' }))
     .toMatchObject({ maxCompletionTokens: 512, maxOutputBytes: 262144 });

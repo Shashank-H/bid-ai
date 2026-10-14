@@ -8,7 +8,7 @@ export const DuplicateTurnResponseSchema = z.strictObject({ duplicate: z.literal
   status: z.enum(['running', 'completed', 'interrupted', 'cancelled', 'error']) });
 
 export const AuthResponseSchema = z.strictObject({ user: PublicUserSchema, publisherId: IdSchema,
-  demoData: z.literal(true), availablePeriod: PeriodInputSchema });
+  availablePeriod: PeriodInputSchema });
 export const ConversationSchema = z.strictObject({ id: z.uuid(), title: z.string().max(80), publisherId: IdSchema,
   createdAt: TimestampSchema, updatedAt: TimestampSchema });
 export const ConversationListSchema = z.strictObject({ conversations: z.array(ConversationSchema).max(20), nextCursor: z.uuid().nullable() });

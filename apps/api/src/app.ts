@@ -7,6 +7,7 @@ import { HttpError } from './errors.js';
 import { ConfigurationError } from './env.js';
 import { registerConversationRoutes } from './routes/conversations.js';
 import type { AgentService } from './agent/service.js';
+import { errorDiagnostics } from './observability/diagnostics.js';
 
 export interface ProductDependencies {
   authorization: Authorization;
@@ -43,7 +44,13 @@ export function buildApp(dependencies: HealthDependencies, logging = false, prod
     if (product.agent) registerConversationRoutes(app, product.authorization, product.agent);
   }
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    if (!(error instanceof HttpError) || error.status >= 500) {
+      request.log.error({ event: 'http_request_failed', requestId: request.id, method: request.method,
+        path: request.url.split('?')[0], error: errorDiagnostics(error,
+          [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? '']) }, 'Request failed');
+    }
+
     if (error instanceof HttpError) {
       void reply.code(error.status).send({ code: error.code, message: error.message });
     } else if (error instanceof ConfigurationError) {

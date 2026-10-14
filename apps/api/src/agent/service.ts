@@ -15,9 +15,11 @@ import { FencedPostgresSaver } from './checkpointer.js';
 import { investigationPrompt } from './prompt.js';
 import { validateAnswer } from './evidence.js';
 import { ConfigurationError, readAgentSettings } from '../env.js';
+import { reportFailure } from '../observability/diagnostics.js';
 
 export type AcceptedTurn = Awaited<ReturnType<ConversationRepository['accept']>>;
-export type ModelRunner = (state: State, signal: AbortSignal, emit: (text: string) => void) => Promise<ModelStep>;
+export type ModelContext = { conversationId: string; turnId: string; correlationId: string; publisherId: string };
+export type ModelRunner = (state: State, signal: AbortSignal, emit: (text: string) => void, context?: ModelContext) => Promise<ModelStep>;
 
 export class AgentService {
   private readonly saver: PostgresSaver;
@@ -66,8 +68,18 @@ export class AgentService {
 
   async run(auth: AuthorizedRequest, accepted: AcceptedTurn, resume: boolean,
     controller: AbortController, emit: (event: StreamEvent) => void) {
-    return this.tracing.turn({ conversationId: accepted.conversation.id, turnId: accepted.turn.id,
-      publisherId: auth.identity.publisherId }, () => this.execute(auth, accepted, resume, controller, emit));
+    let handled: HttpError | undefined;
+
+    try {
+      await this.tracing.turn({ conversationId: accepted.conversation.id, turnId: accepted.turn.id,
+        publisherId: auth.identity.publisherId }, async () => {
+        handled = await this.execute(auth, accepted, resume, controller, emit);
+        if (handled) throw handled;
+      });
+    } catch (cause) {
+      // The failure was already persisted and streamed; rethrowing would send a second HTTP error.
+      if (cause !== handled) throw cause;
+    }
   }
 
   private async execute(auth: AuthorizedRequest, accepted: AcceptedTurn, resume: boolean,
@@ -112,7 +124,7 @@ export class AgentService {
             for (let offset = 0; offset < text.length; offset += 16_384) {
               emit({ ...fields, type: 'text-delta', text: text.slice(offset, offset + 16_384) });
             }
-          });
+          }, { ...fields, publisherId: identity.publisherId });
         } });
       const saved = resume ? await graph.getState(config) : null;
       const savedState = saved?.values as State | undefined;
@@ -138,11 +150,22 @@ export class AgentService {
       try {
         await this.conversations.finish(identity, conversation.id, turn.id, generation,
           cancelled ? 'cancelled' : interrupted ? 'interrupted' : 'error', terminal?.answer ?? visible, cancelled ? 'CANCELLED' : error.code);
-      } catch {
+      } catch (projectionError) {
         // An expired/replaced lease cannot overwrite its successor; recovery handles projection gaps.
+        reportFailure('turn_projection_failed', { ...fields, publisherId: identity.publisherId }, projectionError,
+          [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? '']);
       }
 
+      const failure = new HttpError(cancelled ? 409 : cause instanceof HttpError ? cause.status : 500,
+        cancelled ? 'CANCELLED' : error.code, cancelled ? 'The turn was cancelled.' : error.message, { cause,
+          diagnostics: { ...fields, publisherId: identity.publisherId, abortReason: reason,
+            outcome: cancelled ? 'cancelled' : interrupted ? 'interrupted' : 'error', visibleCharacters: visible.length } });
+      if (!cancelled) reportFailure('investigation_failed', { ...fields, publisherId: identity.publisherId,
+        traceId: this.tracing.traceId }, failure, [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? '']);
+
       emit(cancelled ? { ...fields, type: 'turn-cancelled' } : { ...fields, type: 'turn-error', error });
+
+      return failure;
     } finally {
       clearTimeout(timer);
       clearTimeout(expiry);

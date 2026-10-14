@@ -8,6 +8,7 @@ import { Authorization } from './auth/authorization.js';
 import { createPostgres, postgresUrl } from './db/postgres.js';
 import { ConversationRepository } from './db/conversations.js';
 import { AgentService } from './agent/service.js';
+import { reportFailure } from './observability/diagnostics.js';
 
 let tracing: TracingRuntime | undefined;
 
@@ -41,8 +42,9 @@ try {
   }
 
   await app.listen({ host: '0.0.0.0', port: 3000 });
-} catch {
+} catch (cause) {
+  reportFailure('startup_failed', {}, cause, [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? '']);
   await tracing?.shutdown();
-  console.error('STARTUP_FAILED: check local database/tracing settings and port availability');
+  console.error('STARTUP_FAILED: check application logs for diagnostic details');
   process.exitCode = 1;
 }

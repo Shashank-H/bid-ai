@@ -76,9 +76,11 @@ export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
 
       const evidence = [...new Map([...state.evidence, ...(result?.evidence ?? [])].map((entry) => [entry.evidenceId, entry])).values()];
       const execution = { ...call, result, error };
+      const content = JSON.stringify(result ?? { error });
+
       const next: State = { ...state, pending: state.pending.slice(1), toolCount: state.toolCount + 1,
         evidence, executions: [...state.executions, execution],
-        messages: [...state.messages, { role: 'tool', tool_call_id: call.id, content: JSON.stringify(result ?? { error }) }] };
+        messages: [...state.messages, { role: 'tool', tool_call_id: call.id, content }] };
       if (Buffer.byteLength(JSON.stringify(next)) > 262_144) {
         throw new HttpError(429, 'BUDGET_EXCEEDED', 'The saved turn byte budget was reached.');
       }

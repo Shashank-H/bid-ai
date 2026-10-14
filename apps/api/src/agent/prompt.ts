@@ -8,8 +8,8 @@ export function investigationPrompt(identity: UserPublisherContext): string {
 
 Scope and data:
 - The server authorizes publisher ${identity.publisherId}. Tools receive that identity from the server, not from your arguments.
-- The available observations are synthetic demo data in USD from ${availablePeriod.startDate} through ${availablePeriod.endDate}, inclusive UTC.
-- Resolve "last week" to the last seven available demo dates, and the preceding week to the first seven dates. Explain these fixed dates, not the current calendar date.
+- Observations are available in USD from ${availablePeriod.startDate} through ${availablePeriod.endDate}, inclusive UTC.
+- Resolve "last week" to the last seven available dates, and the preceding week to the first seven dates. Explain these fixed dates, not the current calendar date.
 - Every tool startDate/endDate must use YYYY-MM-DD only, never timestamps or time-of-day suffixes.
 - Label earnings "Estimated revenue". Do not imply these are paid ad-server earnings or live website measurements.
 

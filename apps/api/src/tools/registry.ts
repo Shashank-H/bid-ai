@@ -21,15 +21,15 @@ function define<T>(name: string, description: string, schema: z.ZodType<T>,
 }
 
 export const readOnlyTools = [
-  define('performance_summary', 'Observed auction volume, fill, weighted winning CPM and estimated revenue in inclusive UTC dates. Demo observations only.',
+  define('performance_summary', 'Observed auction volume, fill, weighted winning CPM and estimated revenue in inclusive UTC dates.',
     PeriodInputSchema, (input, context) => analytics.performanceSummary(context, input)),
   define('compare_periods', 'Compare two inclusive UTC periods, with counts, estimated revenue and percentage change. Does not establish causation.',
     z.strictObject({ current: PeriodInputSchema, previous: PeriodInputSchema }), (input, context) => analytics.comparePeriods(context, input)),
   define('bidder_performance', 'Bidder requests, responses, late responses, wins, latency and estimated revenue in inclusive UTC dates.',
     PeriodInputSchema, (input, context) => analytics.bidderPerformance(context, input)),
-  define('current_configuration', 'Read the current publisher demo configuration and version. Cannot save or change it.',
+  define('current_configuration', 'Read the current publisher configuration and version. Cannot save or change it.',
     z.strictObject({}), (_input, context) => configurations.current(context)),
-  define('configuration_history', 'Read timestamped publisher demo configuration history with updating-user attribution in inclusive UTC dates.',
+  define('configuration_history', 'Read timestamped publisher configuration history with updating-user attribution in inclusive UTC dates.',
     PeriodInputSchema, (input, context) => configurations.history(context, input)),
 ] as const;
 

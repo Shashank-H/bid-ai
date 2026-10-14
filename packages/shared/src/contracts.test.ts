@@ -3,7 +3,7 @@ import { AuctionEventSchema, BidderMetricsSchema, ConfigurationHistorySchema, Co
 
 const timestamp = '2026-01-01T00:00:00.000Z';
 const settings = { floorCpm: 0.8, auctionTimeoutMs: 1000, enabledBidders: ['bidder-a'], currency: 'USD' };
-const evidence = { evidenceId: 'e1', publisherId: 'pub-a', source: 'daily-metrics', recordId: 'day-1', observedAt: timestamp, synthetic: true };
+const evidence = { evidenceId: 'e1', publisherId: 'pub-a', source: 'daily-metrics', recordId: 'day-1', observedAt: timestamp };
 
 describe('foundation contracts', () => {
   it('keeps publisher selection outside strict model period input', () => {
@@ -27,12 +27,12 @@ describe('foundation contracts', () => {
   });
 
   it('rejects negative or contradictory counters and permits missing denominator ratios', () => {
-    const daily = { publisherId: 'pub-a', date: '2026-01-01', currency: 'USD', synthetic: true, estimatedRevenue: 0, auctions: 0, opportunities: 0, eligibleOpportunities: 0, filledOpportunities: 0, winningCpmTotal: 0, fillRate: null, averageWinningCpm: null };
+    const daily = { publisherId: 'pub-a', date: '2026-01-01', currency: 'USD', estimatedRevenue: 0, auctions: 0, opportunities: 0, eligibleOpportunities: 0, filledOpportunities: 0, winningCpmTotal: 0, fillRate: null, averageWinningCpm: null };
 
     expect(DailyMetricsSchema.parse(daily)).toEqual(daily);
     expect(DailyMetricsSchema.safeParse({ ...daily, auctions: -1 }).success).toBe(false);
     expect(DailyMetricsSchema.safeParse({ ...daily, filledOpportunities: 1 }).success).toBe(false);
-    expect(BidderMetricsSchema.safeParse({ publisherId: 'pub-a', date: '2026-01-01', currency: 'USD', synthetic: true, estimatedRevenue: 0, bidderId: 'b1', requests: 1, responses: 1, eligibleResponses: 0, lateResponses: 1, wins: 1, responseRate: 1, winRate: 1, averageLatencyMs: 1000 }).success).toBe(false);
+    expect(BidderMetricsSchema.safeParse({ publisherId: 'pub-a', date: '2026-01-01', currency: 'USD', estimatedRevenue: 0, bidderId: 'b1', requests: 1, responses: 1, eligibleResponses: 0, lateResponses: 1, wins: 1, responseRate: 1, winRate: 1, averageLatencyMs: 1000 }).success).toBe(false);
   });
 
   it('bounds configuration fields and requires agent approval attribution', () => {

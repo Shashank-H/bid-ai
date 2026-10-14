@@ -30,7 +30,7 @@ function fixture(letter: 'a' | 'b'): PublisherFixture {
     const cpm = letter === 'a' ? changed ? 1.6 : 1.5 : changed ? 1.9 : 1.8;
     const winningCpmTotal = filledOpportunities * cpm;
 
-    daily.push(DailyMetricsSchema.parse({ publisherId, date: date(day), currency: 'USD', synthetic: true,
+    daily.push(DailyMetricsSchema.parse({ publisherId, date: date(day), currency: 'USD',
       auctions: opportunities, opportunities, eligibleOpportunities: opportunities, filledOpportunities,
       winningCpmTotal, estimatedRevenue: winningCpmTotal / 1000,
       fillRate: filledOpportunities / opportunities, averageWinningCpm: cpm }));
@@ -40,7 +40,7 @@ function fixture(letter: 'a' | 'b'): PublisherFixture {
       const responses = index === 0 ? Math.floor(opportunities * 0.9) : Math.floor(opportunities * 0.5);
       const lateResponses = letter === 'b' && changed && index === 1 ? 1500 : 100;
 
-      bidders.push(BidderMetricsSchema.parse({ publisherId, bidderId, date: date(day), currency: 'USD', synthetic: true,
+      bidders.push(BidderMetricsSchema.parse({ publisherId, bidderId, date: date(day), currency: 'USD',
         requests: opportunities, responses, eligibleResponses: responses - lateResponses, lateResponses, wins,
         estimatedRevenue: wins * cpm / 1000, responseRate: responses / opportunities,
         winRate: wins / opportunities, averageLatencyMs: index === 0 ? 180 : letter === 'b' && changed ? 1400 : 350 }));
@@ -73,7 +73,7 @@ export function publisherFixture(publisherId: string): PublisherFixture {
 }
 
 export function fixtureMetadata(publisherId: string) {
-  return { demoData: true as const, availablePeriod: publisherFixture(publisherId).period };
+  return { availablePeriod: publisherFixture(publisherId).period };
 }
 
 function inPeriod(date: string, period: PeriodInput): boolean {

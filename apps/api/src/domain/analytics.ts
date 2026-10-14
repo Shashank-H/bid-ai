@@ -25,7 +25,7 @@ export function metricEvidence(context: ExecutionContext, records: readonly { da
     const recordId = `${context.identity.publisherId}-${source}-${record.date}${record.bidderId ? `-${record.bidderId}` : ''}`;
 
     return { evidenceId: recordId, publisherId: context.identity.publisherId, source, recordId,
-      observedAt: `${record.date}T00:00:00.000Z`, synthetic: true };
+      observedAt: `${record.date}T00:00:00.000Z` };
   });
 }
 
@@ -36,7 +36,7 @@ export class Analytics implements AnalyticsService {
     const records = await this.repository.daily(context, period);
     const metrics = summary(records, period);
 
-    return { summary: records.length ? 'Demo performance totals; all revenue is estimated.' : 'No demo observations in this period.',
+    return { summary: records.length ? 'Performance totals; all revenue is estimated.' : 'No observations in this period.',
       data: { kind: 'performance-summary', metrics }, evidence: metricEvidence(context, records, 'daily-metrics'), findings: [] };
   }
 
@@ -49,7 +49,7 @@ export class Analytics implements AnalyticsService {
     const evidence = metricEvidence(context, [...currentRecords, ...previousRecords], 'daily-metrics');
 
     return { summary: hasBoth ? 'Compare observed estimated revenue, fill and weighted winning CPM; correlation is not proof of cause.'
-      : 'One or both periods have no demo observations.', data: { kind: 'period-comparison', current, previous,
+      : 'One or both periods have no observations.', data: { kind: 'period-comparison', current, previous,
       estimatedRevenueChange: hasBoth ? current.estimatedRevenue - previous.estimatedRevenue : null,
       estimatedRevenueChangePercent: hasBoth && previous.estimatedRevenue !== 0
         ? (current.estimatedRevenue / previous.estimatedRevenue - 1) * 100 : null },
@@ -73,7 +73,7 @@ export class Analytics implements AnalyticsService {
         winRate: ratio(counts.wins, counts.requests), averageLatencyMs: ratio(latencyTotal, latencyWeight) };
     });
 
-    return { summary: records.length ? 'Bidder comparisons from demo observations; revenue is estimated.' : 'No bidder observations in this period.',
+    return { summary: records.length ? 'Bidder comparisons from observed metrics; revenue is estimated.' : 'No bidder observations in this period.',
       data: { kind: 'bidder-performance', period, currency: records[0]?.currency ?? 'USD', bidders },
       evidence: metricEvidence(context, records, 'bidder-metrics'), findings: [] };
   }

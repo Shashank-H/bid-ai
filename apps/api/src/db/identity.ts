@@ -1,4 +1,4 @@
-import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { PublisherMembershipSchema, UserSchema } from '@bid/shared';
 import type { PublisherMembership, User } from '@bid/shared';
@@ -41,11 +41,27 @@ export class IdentityRepository implements UserRepository {
   async ensureDemoPublisher(letter: 'a' | 'b'): Promise<void> {
     const publisherId = `publisher-${letter}`;
     const Key = { PK: `PUBLISHER#${publisherId}`, SK: 'METADATA' };
-    const data = { publisherId, name: `Publisher ${letter.toUpperCase()}`, currency: 'USD', demoData: true };
+    const data = { publisherId, name: `Publisher ${letter.toUpperCase()}`, currency: 'USD' };
     const existing = await this.document.send(new GetCommand({ TableName: this.publisherTable, Key, ConsistentRead: true }));
 
     if (existing.Item) {
-      if (!isDeepStrictEqual(existing.Item['data'], data)) throw new Error('BOOTSTRAP_CONFLICT: existing publisher was not replaced');
+      const stored: unknown = existing.Item['data'];
+      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+        throw new Error('BOOTSTRAP_CONFLICT: existing publisher was not replaced');
+      }
+
+      const current = { ...stored } as Record<string, unknown>;
+      delete current['demoData'];
+      delete current['synthetic'];
+      if (!isDeepStrictEqual(current, data)) throw new Error('BOOTSTRAP_CONFLICT: existing publisher was not replaced');
+
+      if ('demoData' in stored || 'synthetic' in stored) {
+        await this.document.send(new UpdateCommand({ TableName: this.publisherTable, Key,
+          UpdateExpression: 'REMOVE #data.#demo, #data.#synthetic', ConditionExpression: '#data = :existing',
+          ExpressionAttributeNames: { '#data': 'data', '#demo': 'demoData', '#synthetic': 'synthetic' },
+          ExpressionAttributeValues: { ':existing': stored } }));
+      }
+
       return;
     }
 

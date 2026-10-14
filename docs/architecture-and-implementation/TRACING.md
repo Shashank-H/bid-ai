@@ -2,9 +2,9 @@
 
 ## Scope and setup
 
-The API uses the official Langfuse TypeScript SDK with OpenTelemetry and `observeOpenAI`. Traces go to an **existing Langfuse project**, Cloud or self-hosted; Compose does not add a Langfuse stack. Nothing is exported from the browser.
+The API uses the official Langfuse TypeScript SDK with OpenTelemetry and explicit agent generation observations. Traces go to an **existing Langfuse project**, Cloud or self-hosted; Compose does not add a Langfuse stack. Nothing is exported from the browser.
 
-The only implemented LLM workflow is `model:probe`. Health checks, database commands, and the foundation status page do not create traces. Future chat/tool workflows should reuse `apps/api/src/observability/tracing.ts`, adding authenticated user/session and publisher context only when those features exist.
+Langfuse receives **agent telemetry only**: investigation turns, model generations, tool calls, and the `model:probe` compatibility diagnostic. Application logs are not forwarded to Langfuse. HTTP/authentication, startup, database, health-check and infrastructure diagnostics stay in application/container logs. Investigation telemetry includes publisher, conversation and turn context; correlation IDs connect model failures to application diagnostics.
 
 Set these variables privately in `.env`:
 
@@ -46,6 +46,8 @@ docker compose run --rm --no-deps \
 
 This does not alter `.env` or the application's regular network isolation. Compose also correctly parses quoted `.env` values, unlike raw Docker `--env-file`. Host networking did not reach the model in this Docker Desktop/WSL setup. On Linux Docker Engine, the host alias may require the optional `host-gateway` mapping and a reachable model-server binding described in the runbook. For ongoing Compose use, configure a host-reachable model address. Setting Langfuse keys alone does not enable tracing: set `LANGFUSE_TRACING_ENABLED=true` explicitly.
 
+Requests to the official OpenAI endpoint use `max_completion_tokens`; other compatible endpoints retain `max_tokens` for compatibility. Optional temperature and reasoning-effort parameters are sent only when explicitly configured. Provider errors identify unsupported parameters in the diagnostic metadata rather than hiding the cause behind `MODEL_INCOMPATIBLE`.
+
 The larger diagnostic budgets above accommodate a reasoning model that otherwise consumes the default 64/128-token completion allowances without producing a visible answer. Optional `LLM_PROBE_MAX_TOKENS` accepts 64–1024 per request; `LLM_PROBE_MAX_OUTPUT_BYTES` accepts 2048–1048576 total serialized output bytes. The overall model deadline remains bounded (maximum 120000 ms). Defaults remain unchanged for lightweight models; these options do not enable reasoning export.
 
 ## Observation structure
@@ -60,19 +62,23 @@ model-compatibility-probe                 span: selected checks and result
 └── tool-result-continuation              generation
 ```
 
-Generation observations include the configured model, public diagnostic messages, streamed results, and provider-reported usage when available. A forced tool-call turn may validly contain no text; a separate initial request verifies streaming text. The echo tool is not incorrectly nested under an LLM generation. Failures use sanitized error codes, and streams interrupted by deadlines close their existing generation rather than creating duplicates.
+Investigation turns use a `publisher-investigation` root with `investigation-model` generations and `investigation-tool` observations. A failed turn is recorded as a failure, not a successful `{ finished: true }` result.
+
+Generation observations include the configured model, request messages and parameters, streamed results, and provider-reported usage when available. A forced tool-call turn may validly contain no text; a separate initial request verifies streaming text. The echo tool is not incorrectly nested under an LLM generation. Failures retain sanitized diagnostic context, including failure stage, endpoint/model, HTTP status, provider request ID and error type/code/parameter/message when available. Stream validation failures include the validation paths, finish reason, bounded partial output and last chunk. Streams interrupted by deadlines close their existing generation rather than creating duplicates.
 
 No fake user IDs or sessions are attached. The environment and `feature:model-probe` tag distinguish runs. Token usage is requested with `stream_options.include_usage`; missing provider usage is **not** replaced with estimated counts. The application does not invent prices or report local Llama costs as OpenAI costs. Langfuse may calculate costs independently for models recognized by its own pricing catalog.
 
 ## Privacy and lifecycle
 
 - Only server-side instrumentation receives project credentials. Known keys, credential-like fields, authorization values, email addresses and reasoning fields are masked before export.
-- Export filtering strips request URLs/headers, raw exception events, and unsafe status messages. Diagnostic errors are static codes, not provider response bodies or stacks. SDK debug logging and media uploads are disabled.
-- These controls are defense in depth for the current public diagnostic workflow, not permission to capture arbitrary production conversations. Future features need an explicit payload allowlist and a privacy review before attaching publisher data.
-- OpenTelemetry initializes before model clients are constructed. The official OpenAI wrapper captures generations; no second auto-instrumentation duplicates them.
+- Export filtering removes raw request headers and exception events. Agent errors include redacted, bounded structured diagnostics rather than only a static error code. SDK debug logging and media uploads are disabled.
+- Agent payloads can contain publisher context and tool evidence. Treat the configured Langfuse project as a destination for sensitive agent data and restrict its access appropriately. Application logs are never exported there.
+- OpenTelemetry initializes before model clients are constructed. Explicit generation observations capture requests, streamed output and failures as the stream is consumed; no OpenAI auto-instrumentation duplicates them.
 - Disabled tracing creates no telemetry traffic. Export failures do not change the probe result. Short-lived CLI commands flush and shut down; server shutdown also cleans up telemetry, with bounded waits.
 
 ## Verification and live audit
+
+For failures, first inspect `docker compose logs --tail=200 api` for `model_request_failed` and `investigation_failed`. Match conversation/turn/correlation IDs with the failed agent trace. `http_request_failed`, `startup_failed`, and database diagnostics are application-only. Provider response messages and bounded stream snapshots are sanitized; API keys, cookies, authorization values and credential-bearing endpoint components must never appear.
 
 Unit tests exercise the actual SDK/export pipeline with a local HTTP OTLP receiver: hierarchy, streaming usage, masking, error/cancellation closure, disabled mode and unavailable export destinations. Run the standard build/typecheck/unit checks from the [local runbook](LOCAL-DEVELOPMENT.md).
 

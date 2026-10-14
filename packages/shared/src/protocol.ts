@@ -9,7 +9,6 @@ export const EvidenceReferenceSchema = z.strictObject({
   source: z.enum(['daily-metrics', 'bidder-metrics', 'configuration', 'configuration-history']),
   recordId: IdSchema,
   observedAt: TimestampSchema,
-  synthetic: z.boolean(),
 });
 
 export const FindingSchema = z.strictObject({

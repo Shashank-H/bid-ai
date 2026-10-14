@@ -52,7 +52,7 @@ export function ToolResults({ turnId, tools }: { turnId: string; tools: SavedToo
         <summary><Icon name="evidence" />{entry.source} · {entry.observedAt.slice(0, 10)}</summary>
         <dl><dt>Evidence ID</dt><dd>{entry.evidenceId}</dd><dt>Record</dt><dd>{entry.recordId}</dd>
           <dt>Publisher</dt><dd>{entry.publisherId}</dd><dt>Observed at (UTC)</dt><dd>{entry.observedAt}</dd>
-          <dt>Data</dt><dd>{entry.synthetic ? 'Synthetic demo observations' : 'Recorded observations'}</dd></dl>
+          <dt>Data</dt><dd>Demo observations</dd></dl>
       </details>)}
       {!tool.result.evidence.length && <p>No observations in the requested period.</p>}
     </>}
