@@ -1,14 +1,23 @@
 import OpenAI from 'openai';
-import type { ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam } from 'openai/resources/chat/completions';
+import type {
+  ChatCompletionCreateParamsStreaming,
+  ChatCompletionMessageParam,
+} from 'openai/resources/chat/completions';
 import { z } from 'zod';
 import type { TracingRuntime } from '../observability/tracing.js';
 import { completionLimit, modelTuning } from '../model-parameters.js';
 import type { ModelSettings } from '../env.js';
 
 export type ModelProbeErrorCode =
-  | 'MODEL_CONFIGURATION_INVALID' | 'MODEL_AUTH_FAILED' | 'MODEL_NETWORK_FAILED'
-  | 'MODEL_REQUEST_FAILED' | 'MODEL_STREAMING_UNSUPPORTED' | 'MODEL_TOOLS_UNSUPPORTED'
-  | 'MODEL_PROTOCOL_INVALID' | 'MODEL_TIMEOUT' | 'MODEL_OUTPUT_LIMIT';
+  | 'MODEL_CONFIGURATION_INVALID'
+  | 'MODEL_AUTH_FAILED'
+  | 'MODEL_NETWORK_FAILED'
+  | 'MODEL_REQUEST_FAILED'
+  | 'MODEL_STREAMING_UNSUPPORTED'
+  | 'MODEL_TOOLS_UNSUPPORTED'
+  | 'MODEL_PROTOCOL_INVALID'
+  | 'MODEL_TIMEOUT'
+  | 'MODEL_OUTPUT_LIMIT';
 
 /** Only safe diagnostic codes cross the command boundary, never provider payloads. */
 export class ModelProbeError extends Error {
@@ -43,20 +52,31 @@ export interface ModelProbeResult {
 const ArgumentsSchema = z.strictObject({ message: z.string().min(1).max(256) });
 
 const ChunkSchema = z.object({
-  choices: z.array(z.object({
-    index: z.literal(0),
-    delta: z.object({
-      role: z.literal('assistant').optional(),
-      content: z.string().nullable().optional(),
-      tool_calls: z.array(z.object({
+  choices: z
+    .array(
+      z.object({
         index: z.literal(0),
-        id: z.string().optional(),
-        type: z.literal('function').optional(),
-        function: z.object({ name: z.string().optional(), arguments: z.string().optional() }).optional(),
-      })).max(1).optional(),
-    }),
-    finish_reason: z.string().nullable().optional(),
-  })).max(1),
+        delta: z.object({
+          role: z.literal('assistant').optional(),
+          content: z.string().nullable().optional(),
+          tool_calls: z
+            .array(
+              z.object({
+                index: z.literal(0),
+                id: z.string().optional(),
+                type: z.literal('function').optional(),
+                function: z
+                  .object({ name: z.string().optional(), arguments: z.string().optional() })
+                  .optional(),
+              }),
+            )
+            .max(1)
+            .optional(),
+        }),
+        finish_reason: z.string().nullable().optional(),
+      }),
+    )
+    .max(1),
 });
 
 const tool = {
@@ -64,7 +84,12 @@ const tool = {
   function: {
     name: 'probe_echo',
     description: 'Return the supplied diagnostic message unchanged. No data access or mutation.',
-    parameters: { type: 'object', properties: { message: { type: 'string', minLength: 1, maxLength: 256 } }, required: ['message'], additionalProperties: false },
+    parameters: {
+      type: 'object',
+      properties: { message: { type: 'string', minLength: 1, maxLength: 256 } },
+      required: ['message'],
+      additionalProperties: false,
+    },
   },
 };
 
@@ -82,7 +107,8 @@ export async function runModelProbe(options: ModelProbeOptions): Promise<ModelPr
 async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbeResult> {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? 32_768;
-  const maxChunks = options.maxCompletionTokens === undefined ? 512 : options.maxCompletionTokens * 3 + 16;
+  const maxChunks =
+    options.maxCompletionTokens === undefined ? 512 : options.maxCompletionTokens * 3 + 16;
   let url: URL;
 
   try {
@@ -91,12 +117,25 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
     return failure('MODEL_CONFIGURATION_INVALID');
   }
 
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash
-    || !options.apiKey.trim() || !options.model.trim()
-    || !Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 120_000
-    || !Number.isInteger(maxOutputBytes) || maxOutputBytes < 1 || maxOutputBytes > 1_048_576
-    || (options.maxCompletionTokens !== undefined && (!Number.isInteger(options.maxCompletionTokens)
-      || options.maxCompletionTokens < 64 || options.maxCompletionTokens > 1024))) {
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !options.apiKey.trim() ||
+    !options.model.trim() ||
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > 120_000 ||
+    !Number.isInteger(maxOutputBytes) ||
+    maxOutputBytes < 1 ||
+    maxOutputBytes > 1_048_576 ||
+    (options.maxCompletionTokens !== undefined &&
+      (!Number.isInteger(options.maxCompletionTokens) ||
+        options.maxCompletionTokens < 64 ||
+        options.maxCompletionTokens > 1024))
+  ) {
     return failure('MODEL_CONFIGURATION_INVALID');
   }
 
@@ -104,7 +143,10 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
   let responseType: string | null = null;
   const request = options.fetch ?? globalThis.fetch;
   const client = new OpenAI({
-    baseURL: options.baseURL, apiKey: options.apiKey, maxRetries: 0, timeout: timeoutMs,
+    baseURL: options.baseURL,
+    apiKey: options.apiKey,
+    maxRetries: 0,
+    timeout: timeoutMs,
     logLevel: 'off', // Ignore OPENAI_LOG: diagnostic output must never include raw provider payloads.
     fetch: async (...args) => {
       const response = await request(...args);
@@ -125,7 +167,11 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
     }, timeoutMs);
   });
 
-  async function consume(params: ChatCompletionCreateParamsStreaming, expected: 'text' | 'tool', name: string) {
+  async function consume(
+    params: ChatCompletionCreateParamsStreaming,
+    expected: 'text' | 'tool',
+    name: string,
+  ) {
     const operation = (observedClient: OpenAI) => consumeStream(params, expected, observedClient);
 
     return options.tracing?.enabled
@@ -133,19 +179,29 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
       : operation(client);
   }
 
-  async function consumeStream(params: ChatCompletionCreateParamsStreaming, expected: 'text' | 'tool', observedClient: OpenAI) {
+  async function consumeStream(
+    params: ChatCompletionCreateParamsStreaming,
+    expected: 'text' | 'tool',
+    observedClient: OpenAI,
+  ) {
     state.phase = expected;
     responseType = null;
 
     // Capture HTTP metadata in the fetch adapter so tracing does not depend on APIPromise extensions.
-    const stream = await observedClient.chat.completions.create({
-      ...params,
-      ...modelTuning(options),
-      stream_options: { include_usage: true },
-    }, { signal: controller.signal });
+    const stream = await observedClient.chat.completions.create(
+      {
+        ...params,
+        ...modelTuning(options),
+        stream_options: { include_usage: true },
+      },
+      { signal: controller.signal },
+    );
 
-    if (!(responseType as string | null)?.toLowerCase().includes('text/event-stream')
-      || !stream || typeof stream[Symbol.asyncIterator] !== 'function') {
+    if (
+      !(responseType as string | null)?.toLowerCase().includes('text/event-stream') ||
+      !stream ||
+      typeof stream[Symbol.asyncIterator] !== 'function'
+    ) {
       failure('MODEL_STREAMING_UNSUPPORTED');
     }
 
@@ -168,8 +224,11 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
       if (!choice) continue; // Optional usage-only final chunk.
       if (finish !== undefined) {
         // OpenRouter may repeat the finished choice in its final usage trailer.
-        if (choice.delta.content || choice.delta.tool_calls?.length
-          || choice.finish_reason != null && choice.finish_reason !== finish) {
+        if (
+          choice.delta.content ||
+          choice.delta.tool_calls?.length ||
+          (choice.finish_reason != null && choice.finish_reason !== finish)
+        ) {
           failure('MODEL_PROTOCOL_INVALID');
         }
 
@@ -187,7 +246,8 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
         id = call.id ?? id;
         name += call.function?.name ?? '';
         argumentsText += call.function?.arguments ?? '';
-        if (id.length > 128 || name.length > 64 || argumentsText.length > 2048) failure('MODEL_OUTPUT_LIMIT');
+        if (id.length > 128 || name.length > 64 || argumentsText.length > 2048)
+          failure('MODEL_OUTPUT_LIMIT');
       }
 
       if (choice.finish_reason != null) finish = choice.finish_reason;
@@ -210,18 +270,32 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
   }
 
   const execute = async (): Promise<ModelProbeResult> => {
-    await consume({
-      model: options.model, stream: true, ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 64),
-      messages: [{ role: 'user', content: 'Reply briefly with: streaming works.' }],
-    }, 'text', 'streaming-check');
+    await consume(
+      {
+        model: options.model,
+        stream: true,
+        ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 64),
+        messages: [{ role: 'user', content: 'Reply briefly with: streaming works.' }],
+      },
+      'text',
+      'streaming-check',
+    );
 
     const messages: ChatCompletionMessageParam[] = [
       { role: 'user', content: 'Call probe_echo with message "compatibility check".' },
     ];
-    const call = await consume({
-      model: options.model, stream: true, ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 128), messages, tools: [tool],
-      tool_choice: { type: 'function', function: { name: 'probe_echo' } },
-    }, 'tool', 'tool-call-check');
+    const call = await consume(
+      {
+        model: options.model,
+        stream: true,
+        ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 128),
+        messages,
+        tools: [tool],
+        tool_choice: { type: 'function', function: { name: 'probe_echo' } },
+      },
+      'tool',
+      'tool-call-check',
+    );
 
     let rawArguments: unknown;
 
@@ -238,14 +312,32 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
     const echoed = options.tracing?.enabled
       ? await options.tracing.tool({ message: args.data.message }, executeEcho)
       : executeEcho(); // Actual harmless local function execution.
-    messages.push({
-      role: 'assistant', content: call.text || null,
-      tool_calls: [{ id: call.id, type: 'function', function: { name: call.name, arguments: call.argumentsText } }],
-    }, { role: 'tool', tool_call_id: call.id, content: JSON.stringify(echoed) },
-    { role: 'user', content: 'Briefly acknowledge receiving the tool result.' });
+    messages.push(
+      {
+        role: 'assistant',
+        content: call.text || null,
+        tool_calls: [
+          {
+            id: call.id,
+            type: 'function',
+            function: { name: call.name, arguments: call.argumentsText },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: call.id, content: JSON.stringify(echoed) },
+      { role: 'user', content: 'Briefly acknowledge receiving the tool result.' },
+    );
 
-    await consume({ model: options.model, stream: true,
-      ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 64), messages }, 'text', 'tool-result-continuation');
+    await consume(
+      {
+        model: options.model,
+        stream: true,
+        ...completionLimit(options.baseURL, options.maxCompletionTokens ?? 64),
+        messages,
+      },
+      'text',
+      'tool-result-continuation',
+    );
 
     return { compatible: true, streaming: true, toolCalls: true, continuation: true };
   };
@@ -255,10 +347,12 @@ async function executeModelProbe(options: ModelProbeOptions): Promise<ModelProbe
   } catch (error) {
     if (error instanceof ModelProbeError) throw error;
 
-    if (controller.signal.aborted || error instanceof OpenAI.APIConnectionTimeoutError) failure('MODEL_TIMEOUT');
+    if (controller.signal.aborted || error instanceof OpenAI.APIConnectionTimeoutError)
+      failure('MODEL_TIMEOUT');
     if (error instanceof OpenAI.APIError) {
       if (error.status === 401 || error.status === 403) failure('MODEL_AUTH_FAILED');
-      if (state.phase === 'tool' && (error.status === 400 || error.status === 422)) failure('MODEL_TOOLS_UNSUPPORTED');
+      if (state.phase === 'tool' && (error.status === 400 || error.status === 422))
+        failure('MODEL_TOOLS_UNSUPPORTED');
       if (error instanceof OpenAI.APIConnectionError) failure('MODEL_NETWORK_FAILED');
       failure('MODEL_REQUEST_FAILED');
     }

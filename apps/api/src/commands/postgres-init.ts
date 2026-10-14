@@ -13,7 +13,9 @@ export async function initializePostgres(env: NodeJS.ProcessEnv): Promise<{ init
 
     try {
       await lock.query("SELECT pg_advisory_lock(hashtext('bid-postgres-init'))");
-      await migrate(postgres.db, { migrationsFolder: fileURLToPath(new URL('../db/migrations', import.meta.url)) });
+      await migrate(postgres.db, {
+        migrationsFolder: fileURLToPath(new URL('../db/migrations', import.meta.url)),
+      });
       await saver.setup();
     } finally {
       await lock.query("SELECT pg_advisory_unlock(hashtext('bid-postgres-init'))");

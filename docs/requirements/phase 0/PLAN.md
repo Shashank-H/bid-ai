@@ -62,11 +62,11 @@ Sources: `docs/architecture-and-implementation/IMPLEMENTATION-ROADMAP.md`, `docs
 
 Provision three prefix-configurable DynamoDB tables, all with provisional string `PK`/`SK` keys and on-demand billing. The reviewer approved treating physical keys/access patterns as placeholders: later phases will design them and may change them. Avoid speculative indexes; refine query access patterns in later phase plans. Init compares existing key schemas and TTL settings, creates missing tables, waits for ACTIVE, enables session TTL, and fails clearly on incompatible schemas; it never deletes or overwrites records.
 
-| Table | Reserved logical entity groups (keys designed later) |
-| --- | --- |
-| `bid-identity` | Users, login identity, publisher memberships and sessions; session TTL `expiresAt` |
+| Table                | Reserved logical entity groups (keys designed later)                                       |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `bid-identity`       | Users, login identity, publisher memberships and sessions; session TTL `expiresAt`         |
 | `bid-publisher-data` | Publisher-scoped events, daily/bidder metrics, current configuration and immutable history |
-| `bid-workflow` | Reserved publisher-scoped proposals/audit records; workflows deferred to Phase 5 |
+| `bid-workflow`       | Reserved publisher-scoped proposals/audit records; workflows deferred to Phase 5           |
 
 - Implement DB client, resource definitions, initialization, and table-readiness helpers only. Declare user/session and publisher repository interfaces; defer operational repositories and writes to their owning phases. Fixture/database repository mode is validated configuration, not a promise of an implemented analytics backend.
 - Publisher-bearing records include `publisherId`; define trusted `UserPublisherContext` derived only by server authorization. Tool schemas must not grant unrestricted publisher selection. Future sessions validate expiry server-side, independent of eventual TTL deletion.

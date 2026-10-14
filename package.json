@@ -12,6 +12,8 @@
     "test": "vitest run --config vitest.config.ts",
     "test:integration": "pnpm build && vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "db:init": "pnpm --filter @bid/api db:init",
     "db:verify": "pnpm --filter @bid/api db:verify",
     "db:reset": "pnpm --filter @bid/api db:reset",
@@ -23,9 +25,10 @@
     "postgres:init": "pnpm --filter @bid/api postgres:init"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
-    "vitest": "5.0.4",
     "@playwright/test": "1.64.0",
-    "@types/node": "24.19.2"
+    "@types/node": "24.19.2",
+    "prettier": "^3.9.10",
+    "typescript": "5.9.3",
+    "vitest": "5.0.4"
   }
 }

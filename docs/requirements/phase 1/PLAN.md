@@ -21,6 +21,7 @@ Full historical generation, persisted analytics, configuration editing, charts, 
 ## Files to modify
 
 Existing files:
+
 - `apps/api/src/app.ts`, `server.ts`, `env.ts`: dependencies, route registration, safe HTTP errors, lifecycle and bounded agent settings.
 - `apps/api/src/domain/interfaces.ts`, `tools/types.ts`: PostgreSQL conversation storage and typed numerical tool outputs.
 - `apps/api/package.json`, `pnpm-lock.yaml`: add compatible pinned `argon2`, `drizzle-orm`, `@langchain/langgraph`, `@langchain/langgraph-checkpoint-postgres` and `pg` dependencies, plus `drizzle-kit` as a development dependency (and direct peer/type dependencies as required); validate exact versions together during implementation.
@@ -33,6 +34,7 @@ Existing files:
 - `README.md`, `docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md`, `IMPLEMENTATION-ROADMAP.md`: commands, conversation scope, and corrected model-probe status.
 
 New focused modules (filenames may be combined where small):
+
 - `apps/api/src/auth/{credentials,authorization}.ts`, `routes/auth.ts`, `db/identity.ts`, `db/postgres.ts`, `db/conversations.ts`, `db/schema.ts`, `db/migrations/` (Drizzle-generated SQL and migration metadata), `apps/api/drizzle.config.ts`, `commands/users-bootstrap.ts`, `commands/postgres-init.ts`.
 - `apps/api/src/fixtures/publishers.ts`, `domain/{analytics,configuration}.ts`, `tools/{registry,dispatch}.ts`.
 - `apps/api/src/agent/{graph,state,prompt,stream}.ts`, `routes/conversations.ts`: LangGraph orchestration with the existing SDK/tools and safe stream adapter.
@@ -52,6 +54,7 @@ New focused modules (filenames may be combined where small):
 ## Steps
 
 ### 1. Authentication and explicit user bootstrap
+
 - [x] Use Argon2id through a pinned `argon2` dependency, with library-generated random salts and library verification. Start with memoryCost 19456 KiB, timeCost 2 and parallelism 1; verify native package compatibility and login latency in the API Docker image. Bound password/login sizes; never log credentials. Require two passwords through private environment settings for explicit bootstrap; no hardcoded/default passwords or registration/reset flows.
 - [x] Implement repeat-safe conditional creation in `identity`: `LOGIN#<normalized-login>/USER` for lookup, `USER#<id>/MEMBERSHIP#<publisher>` for membership; no `SESSION#` records. Use transactions for consistent user/membership bootstrap; reruns must not silently replace passwords or memberships.
 - [x] Implement `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`. Return only public user/publisher metadata. Uniform invalid-login responses and small bounded local login throttling; explicitly document single-process limits.
@@ -60,6 +63,7 @@ New focused modules (filenames may be combined where small):
 - [x] Keep trusted context construction confined to authorization code; resolve the publisher from membership, never model arguments. Preserve safe 400/401/403/404/409/429 errors rather than mapping all expected failures to the current generic 500.
 
 ### 2. Tiny fixtures and usable read-only tools
+
 - [x] Check in two distinct fixed 14-day UTC fixture windows with daily/bidder aggregates, current configuration and attributed history. Expose available dates in auth/chat context, so “last week” resolves relative to available data rather than wall-clock time. Keep the demo disclaimer in the UI only; do not attach demo/synthetic flags to auth, metric or evidence records.
 - [x] Use internally consistent counts, weighted CPM/fill/response/win calculations, null zero-denominator ratios and revenue totals. Publisher A has a small demonstrable before/after change; Publisher B has visibly different bidder behavior. Do not implement raw-event generation, an exact 18% target or a hidden answer manifest here.
 - [x] Implement fixture repositories using trusted context and existing interfaces, then shared analytics/configuration services. Keep configuration mutation unimplemented. Return bounded numerical observations plus evidence; text summaries alone are insufficient.
@@ -67,6 +71,7 @@ New focused modules (filenames may be combined where small):
 - [x] Dispatch by allowlisted name, validate input/output, publisher-match evidence and enforce result byte limits. Stable evidence IDs reference returned metric/config records; never expose credential/session records or opaque errors to the model. No tool transport or mutation tools.
 
 ### 3. PostgreSQL conversations and LangGraph checkpoints
+
 - [x] Add one pinned supported Postgres image, internal Compose networking, healthcheck and named persistent volume. Do not expose its port by default. Add server-only URL/credentials, bounded connection pool/timeouts and graceful shutdown. Keep DynamoDB identity and publisher-data ownership unchanged; publisher metadata is now explicitly bootstrapped.
 - [x] Use Drizzle ORM with the `pg` driver for application conversation tables, queries and transactions. Define the application schema in `db/schema.ts`; generate and commit versioned SQL migrations with Drizzle Kit. An explicit repeat-safe `postgres:init` command applies committed migrations with Drizzle's migrator, then runs `PostgresSaver.setup()` before checkpoints are used. Do not use schema push during startup.
 - [x] Keep agent checkpointing on LangGraph's official PostgreSQL saver, independently of Drizzle. It already implements LangGraph checkpoint/pending-write semantics and owns its migrations; do not recreate those tables in Drizzle or build a custom ORM checkpointer. Follow the installed saver's pool/schema requirements and use the same Postgres database with clear table/schema ownership. Fresh initialization and restart must preserve both application and saver tables; no destructive resets or credentials in logs.
@@ -81,6 +86,7 @@ New focused modules (filenames may be combined where small):
 - [x] Preserve saved display history, but construct bounded model context from completed messages and valid tool-call/result pairs. Never remove pending tool calls during context trimming. Keep older-context omission explicit; no vector store, semantic memory, branching/time-travel UI or conversation summarization.
 
 ### 4. Actual streaming model/tool loop
+
 - [x] Lazily initialize the configured OpenAI SDK inside the LangGraph model node; missing/incompatible model settings must not prevent login or health startup. Reuse safe model configuration and tracing generation/tool wrappers; `runModelProbe` remains a diagnostic. Graph conditional routing and state counters enforce round/tool budgets; LangGraph recursion limit is an additional guard, not the sole budget.
 - [x] Assemble streamed tool-call arguments by call index/ID (including multiple fragmented calls), then validate and execute sequentially. Return actual tool results to the model and continue until its final answer or a budget/error ends the turn. Disable automatic whole-turn retries after partial output.
 - [x] Initial limits: 6 model rounds, 12 tool calls, 16 KiB per tool input, 32 KiB per tool result, 128 KiB model context, 64 KiB visible assistant output, 110-second total deadline and bounded per-request timeout. Completion-token budget configurable independently of probe settings (default 4096, hard cap 8192); tests override limits to exercise exhaustion. Bound total serialized turn/evidence storage and chunk counts too.
@@ -90,11 +96,13 @@ New focused modules (filenames may be combined where small):
 - [x] Drop separate reasoning fields and suppress supported inline thinking/analysis tags with a stateful chunk-aware filter before emitting, saving or tracing content. No raw model chain-of-thought or private payload viewer. Retain known trace masking/normalization and extend turn tracing without new Langfuse services, prompt management, datasets or SDK upgrades.
 
 ### 5. Bare functional browser UI
+
 - [x] Accessible labelled login, authenticated publisher/demo-date header, logout, basic saved conversation list and New chat. No selector, charts, design system overhaul or settings editor.
 - [x] Chat composer, streaming response, Stop, explicit loading/error/interrupted states and no duplicate sends. Render model text as plain text (no raw HTML); show observation/hypothesis/recommendation distinctions and evidence links.
 - [x] Expandable tool execution cards show actual inputs, bounded numerical results and evidence records, not internal reasoning. Display “Estimated revenue” and demo-data label consistently. After refresh/restart show persisted terminal/partial state; after logout clear all cached publisher chat state.
 
 ### 6. Verification and documentation
+
 - [x] Run core cross-service/e2e checks below; no broad new unit-test suite is required. Adapt existing foundation checks and preserve boundary/security assertions.
 - [x] Document explicit user/Postgres bootstrap, fixture dates, conversation/checkpoint persistence, authorized resume, replay semantics, limits and runtime settings. Update roadmap's stale Phase 0 probe status using `TRACING-VERIFICATION.md`; replace obsolete no-Postgres/no-extra-service claims and record LangGraph/Postgres as user-approved architecture revisions.
 
@@ -136,7 +144,6 @@ Confirmed follow-up: PostgreSQL owns conversations and agent checkpoints using L
 - [LangGraph graph API](https://docs.langchain.com/oss/javascript/langgraph/graph-api): explicit graph/state and the warning that private channels are not hidden from raw graph streaming.
 
 These docs were inspected during planning. Confirm exact compatible package APIs/versions before installation; use the existing OpenAI SDK in custom graph nodes rather than replacing proven provider integration.
-
 
 ## Approved execution notes and final status
 

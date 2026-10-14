@@ -17,7 +17,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bid -d bid"]
+      test: ['CMD-SHELL', 'pg_isready -U bid -d bid']
       interval: 5s
       timeout: 4s
       retries: 20
@@ -27,14 +27,14 @@ services:
     build:
       context: .
       dockerfile: docker/dynamodb.Dockerfile
-    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/home/dynamodblocal/data"]
+    command: ['-jar', 'DynamoDBLocal.jar', '-sharedDb', '-dbPath', '/home/dynamodblocal/data']
     ports:
-      - "127.0.0.1:8000:8000"
+      - '127.0.0.1:8000:8000'
     volumes:
       - dynamodb-data:/home/dynamodblocal/data
     healthcheck:
       # DynamoDB returns HTTP 400 for an unsigned request, which still proves HTTP readiness.
-      test: ["CMD-SHELL", "curl --silent --output /dev/null --max-time 3 http://127.0.0.1:8000/"]
+      test: ['CMD-SHELL', 'curl --silent --output /dev/null --max-time 3 http://127.0.0.1:8000/']
       interval: 5s
       timeout: 4s
       retries: 20
@@ -46,12 +46,12 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
       target: runtime
-    command: ["node", "dist/commands/cli.js", "db:init"]
+    command: ['node', 'dist/commands/cli.js', 'db:init']
     environment: *database-environment
     depends_on:
       dynamodb:
         condition: service_healthy
-    restart: "no"
+    restart: 'no'
 
   api:
     build:
@@ -64,7 +64,7 @@ services:
     environment:
       <<: *database-environment
       HOST: 0.0.0.0
-      PORT: "3000"
+      PORT: '3000'
       NODE_ENV: production
       REPOSITORY_MODE: ${REPOSITORY_MODE:-fixture}
       DATABASE_URL: ${DATABASE_URL:-}
@@ -84,9 +84,9 @@ services:
       LANGFUSE_TRACING_ENVIRONMENT: ${LANGFUSE_TRACING_ENVIRONMENT:-development}
       LANGFUSE_TIMEOUT_MS: ${LANGFUSE_TIMEOUT_MS:-2000}
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     ports:
-      - "127.0.0.1:${API_PORT:-3000}:3000"
+      - '127.0.0.1:${API_PORT:-3000}:3000'
     depends_on:
       dynamodb:
         condition: service_healthy
@@ -95,7 +95,13 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health/ready',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -108,12 +114,12 @@ services:
       dockerfile: docker/web.Dockerfile
       target: runtime
     ports:
-      - "127.0.0.1:${WEB_PORT:-8080}:80"
+      - '127.0.0.1:${WEB_PORT:-8080}:80'
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
+      test: ['CMD', 'wget', '--quiet', '--spider', 'http://127.0.0.1/health']
       interval: 5s
       timeout: 4s
       retries: 6

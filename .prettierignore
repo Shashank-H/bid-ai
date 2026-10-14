@@ -1,0 +1,15 @@
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+coverage/
+playwright-report/
+test-results/
+.next/
+.env
+.env.*
+!.env.example
+pnpm-lock.yaml
+*.lock
+*.min.*
+public/fonts/

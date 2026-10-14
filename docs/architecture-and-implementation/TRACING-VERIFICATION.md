@@ -13,11 +13,11 @@ The parent independently audited the actual Langfuse observations using the offi
 - All four children reference the root; all observations have end times and no error status.
 - Inputs and outputs are present for all five observations; root output records the compatibility flags rather than configuration/function arguments.
 
-| Generation | Input tokens | Output tokens | Total |
-| --- | ---: | ---: | ---: |
-| `streaming-check` | 17 | 234 | 251 |
-| `tool-call-check` | 283 | 156 | 439 |
-| `tool-result-continuation` | 81 | 90 | 171 |
+| Generation                 | Input tokens | Output tokens | Total |
+| -------------------------- | -----------: | ------------: | ----: |
+| `streaming-check`          |           17 |           234 |   251 |
+| `tool-call-check`          |          283 |           156 |   439 |
+| `tool-result-continuation` |           81 |            90 |   171 |
 
 These counts come from provider usage, not local estimates. Cost maps were empty; no prices were fabricated. Scanning the returned observation payloads detected no configured credential/endpoint values or supported inline private-reasoning tags. This verifies this diagnostic run, not a guarantee about arbitrary future payloads.
 

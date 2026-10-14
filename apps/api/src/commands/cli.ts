@@ -18,10 +18,21 @@ const help = `Foundation commands:
 No data is loaded during ordinary startup. Model settings stay server-side.
 `;
 
-const commands = ['db:init', 'db:verify', 'db:reset', 'model:probe', 'users:bootstrap', 'postgres:init', ...Object.keys(deferredCommands)];
+const commands = [
+  'db:init',
+  'db:verify',
+  'db:reset',
+  'model:probe',
+  'users:bootstrap',
+  'postgres:init',
+  ...Object.keys(deferredCommands),
+];
 
-export async function runCli(args: readonly string[], env: NodeJS.ProcessEnv = process.env,
-  output: (message: string) => void = console.log): Promise<number> {
+export async function runCli(
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env,
+  output: (message: string) => void = console.log,
+): Promise<number> {
   const [command, ...options] = args;
 
   if (!command || (command === '--help' && options.length === 0)) {
@@ -60,7 +71,9 @@ export async function runCli(args: readonly string[], env: NodeJS.ProcessEnv = p
         // Initialize telemetry before importing/constructing the LLM client.
         const { runModelProbe } = await import('./model-probe.js');
         const result = await runModelProbe({ ...model, tracing });
-        output(JSON.stringify({ ...result, ...(tracing.traceId ? { traceId: tracing.traceId } : {}) }));
+        output(
+          JSON.stringify({ ...result, ...(tracing.traceId ? { traceId: tracing.traceId } : {}) }),
+        );
       } catch (error) {
         if (tracing.traceId) output(JSON.stringify({ traceId: tracing.traceId, status: 'failed' }));
 
@@ -102,8 +115,13 @@ export async function runCli(args: readonly string[], env: NodeJS.ProcessEnv = p
     }
 
     // SDK/provider payloads are intentionally never printed by operational commands.
-    const message = error instanceof Error && /^(RESET_REFUSED|INVALID_ARGUMENTS|INCOMPATIBLE_SCHEMA|INCOMPATIBLE_TTL|TTL_TRANSITION_PENDING|INVALID_VERIFICATION_TOKEN|BOOTSTRAP_CONFLICT|DATABASE_NOT_READY):?/.test(error.message)
-      ? error.message : 'COMMAND_FAILED: check local configuration and dependency readiness';
+    const message =
+      error instanceof Error &&
+      /^(RESET_REFUSED|INVALID_ARGUMENTS|INCOMPATIBLE_SCHEMA|INCOMPATIBLE_TTL|TTL_TRANSITION_PENDING|INVALID_VERIFICATION_TOKEN|BOOTSTRAP_CONFLICT|DATABASE_NOT_READY):?/.test(
+        error.message,
+      )
+        ? error.message
+        : 'COMMAND_FAILED: check local configuration and dependency readiness';
     output(message);
 
     return 1;
@@ -115,8 +133,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 
   // Exporter sockets can outlive a bounded shutdown (for example a trickling peer).
   // Only the executable entrypoint exits explicitly; importing runCli remains safe.
-  await Promise.all([process.stdout, process.stderr].map((stream) => new Promise<void>((resolve) => {
-    stream.write('', () => resolve());
-  })));
+  await Promise.all(
+    [process.stdout, process.stderr].map(
+      (stream) =>
+        new Promise<void>((resolve) => {
+          stream.write('', () => resolve());
+        }),
+    ),
+  );
   process.exit(status);
 }

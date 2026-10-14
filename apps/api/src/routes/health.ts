@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 
 export interface HealthDependencies {
-  checkReady: () => Promise<boolean>
+  checkReady: () => Promise<boolean>;
 }
 
 export function registerHealthRoutes(app: FastifyInstance, dependencies: HealthDependencies): void {

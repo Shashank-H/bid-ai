@@ -16,14 +16,24 @@ export function App() {
     setChecking(true);
     setError('');
 
-    void api('/api/auth/me', AuthResponseSchema).then((user) => { if (!disposed) setAuth(user); })
+    void api('/api/auth/me', AuthResponseSchema)
+      .then((user) => {
+        if (!disposed) setAuth(user);
+      })
       .catch((cause: unknown) => {
         if (!disposed && !(cause instanceof ApiError && cause.status === 401)) {
-          setError('API is unavailable or its settings are not ready. Check local services and authentication configuration.');
+          setError(
+            'API is unavailable or its settings are not ready. Check local services and authentication configuration.',
+          );
         }
-      }).finally(() => { if (!disposed) setChecking(false); });
+      })
+      .finally(() => {
+        if (!disposed) setChecking(false);
+      });
 
-    return () => { disposed = true; };
+    return () => {
+      disposed = true;
+    };
   }, [retry]);
 
   function clearAuth() {
@@ -40,11 +50,44 @@ export function App() {
     }
   }
 
-  return <main className={`app${auth ? ' authenticated' : ' signed-out'}`}>
-    {!auth && <header className="app-header"><h1>Bid Intelligence<span className="brand-dot">.</span></h1><p className="hint">A clearer view of your auction performance.</p></header>}
-    {checking ? <p className="session-status" role="status">Checking your login…</p> : <>
-      {error && <section className="app-error"><p role="alert" className="error">{error}</p><button className="secondary" onClick={() => setRetry((value) => value + 1)}>Check again</button></section>}
-      {auth ? <Chat key={`${auth.user.userId}:${auth.publisherId}`} auth={auth} onUnauthorized={clearAuth} onLogout={() => void logout()} /> : <Login onLogin={setAuth} />}
-    </>}
-  </main>;
+  return (
+    <main className={`app${auth ? ' authenticated' : ' signed-out'}`}>
+      {!auth && (
+        <header className="app-header">
+          <h1>
+            Bid Intelligence<span className="brand-dot">.</span>
+          </h1>
+          <p className="hint">A clearer view of your auction performance.</p>
+        </header>
+      )}
+      {checking ? (
+        <p className="session-status" role="status">
+          Checking your login…
+        </p>
+      ) : (
+        <>
+          {error && (
+            <section className="app-error">
+              <p role="alert" className="error">
+                {error}
+              </p>
+              <button className="secondary" onClick={() => setRetry((value) => value + 1)}>
+                Check again
+              </button>
+            </section>
+          )}
+          {auth ? (
+            <Chat
+              key={`${auth.user.userId}:${auth.publisherId}`}
+              auth={auth}
+              onUnauthorized={clearAuth}
+              onLogout={() => void logout()}
+            />
+          ) : (
+            <Login onLogin={setAuth} />
+          )}
+        </>
+      )}
+    </main>
+  );
 }

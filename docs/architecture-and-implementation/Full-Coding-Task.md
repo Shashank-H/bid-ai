@@ -1,6 +1,6 @@
 **Exercise: Integrating and Persisting Prebid.js Auction Data**
 
-**NOTE:** Feel free to produce any flavour of this problem that showcases your strongest skills. Be that Frontend, Backend, Data or ML. This exercise is about you, not about this task\* 
+**NOTE:** Feel free to produce any flavour of this problem that showcases your strongest skills. Be that Frontend, Backend, Data or ML. This exercise is about you, not about this task\*
 
 **Problem Overview**  
 The objective of this task is to architect and develop a system that integrates with Prebid.js to capture auction-related events and persistently stores them in a cloud database via a serverless function.
@@ -9,10 +9,14 @@ Please prepare a short Development Plan document. You should refer to this docum
 
 Your task involves tracking auction events such as \`bidRequested\`, \`bidResponse\`, \`bidWon\`, and others. These events must be intercepted on the client side using a standalone JavaScript file, which should be asynchronously injectable into any webpage via a \`\<script\>\` tag. The captured events are then to be transmitted to a backend service, processed by a serverless function, and finally recorded in a cloud-based database.
 
-**Initial Steps**  
-1\. Implement and configure Prebid.js within a web environment. Useful resources include:  
-   \- Ad Unit Refresh Example [https\://docs.prebid.org/dev-docs/examples/adunit-refresh.html](https://docs.prebid.org/dev-docs/examples/adunit-refresh.html)  
-   \- Basic Example [https\://docs.prebid.org/dev-docs/examples/basic-example.html](https://docs.prebid.org/dev-docs/examples/basic-example.html)  
+**Initial Steps**
+
+1\. Implement and configure Prebid.js within a web environment. Useful resources include:
+
+\- Ad Unit Refresh Example [https\://docs.prebid.org/dev-docs/examples/adunit-refresh.html](https://docs.prebid.org/dev-docs/examples/adunit-refresh.html)
+
+\- Basic Example [https\://docs.prebid.org/dev-docs/examples/basic-example.html](https://docs.prebid.org/dev-docs/examples/basic-example.html)
+
 2\. Develop a separate JavaScript file for event monitoring. This script should be capable of being injected into the Prebid.js setup from step 1 to monitor and capture specified ad auction events.  
 3\. Utilize Axios or Fetch to forward the captured events to a designated API endpoint.
 
@@ -39,4 +43,3 @@ In the initial steps, the main objective is to get Prebid running in your web en
 \- **AI / Agentic focus**: You are building a chat-based AI agent embedded in a publisher's ad-ops dashboard. The agent can investigate issues, explain findings, and take corrective action on live ad configuration but **mutating actions require explicit publisher approval**. The agent is powered by an LLM, exposes a streaming chat API to the frontend, and calls backend capabilities via an MCP server that **you will design**.
 
 **NOTE: You are not expected to complete every step. We'd rather see thoughtful work in your area of strength than shallow coverage of everything. Your Development Plan should reflect which angle you're taking and why.**
-

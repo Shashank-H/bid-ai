@@ -44,20 +44,20 @@ Do not remove volumes as part of ordinary startup or shutdown. After source chan
 
 `.env` is ignored by Git and excluded from Docker build contexts. Do not put secrets in `VITE_*` variables, browser source, build arguments or documentation. `docker compose config` without `--quiet` prints interpolated values, including secrets: do not publish that output.
 
-| Setting | Default / behavior |
-| --- | --- |
-| `WEB_PORT`, `API_PORT` | 8080 / 3000, host bindings restricted to `127.0.0.1`; API internally listens on 3000 |
-| `DYNAMODB_ENDPOINT` | `http://dynamodb:8000`; local HTTP loopback/Compose endpoints only; cloud/remote database URLs rejected |
-| `TABLE_PREFIX` | `bid`; allowed format `bid` followed by optional lowercase alphanumeric hyphen-separated segments |
-| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `local`; dummy local-only values, never real AWS credentials |
-| `REPOSITORY_MODE` | `fixture` provides tiny demo analytics; database-backed analytics remain deferred |
-| `SESSION_COOKIE_NAME` | `bid_session`; identifier-style cookie name |
-| `SESSION_LIFETIME_SECONDS` | 28800; validated range 60–604800 |
-| `SESSION_COOKIE_SECURE` | `false`; accepts only `true`/`false`; signed HttpOnly SameSite=Strict cookie; Secure=true requires HTTPS |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | `http://host.docker.internal:11434/v1`, `ollama` (non-secret placeholder), `qwen3.5:9b`; explicit nonblank overrides supported |
-| `LLM_TIMEOUT_MS` | 110000; model/probe accepts 1000–120000; product also enforces the turn deadline |
-| `LLM_REASONING_EFFORT`, `LLM_TEMPERATURE` | Standard request options, default `none` / `0`, independently configurable for other models |
-| `AUTH_SIGNING_SECRET`, `DEMO_PASSWORD_A/B` | Public local-demo defaults matching DEMO-ACCOUNTS.md; replace for shared deployment |
+| Setting                                                    | Default / behavior                                                                                                             |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `WEB_PORT`, `API_PORT`                                     | 8080 / 3000, host bindings restricted to `127.0.0.1`; API internally listens on 3000                                           |
+| `DYNAMODB_ENDPOINT`                                        | `http://dynamodb:8000`; local HTTP loopback/Compose endpoints only; cloud/remote database URLs rejected                        |
+| `TABLE_PREFIX`                                             | `bid`; allowed format `bid` followed by optional lowercase alphanumeric hyphen-separated segments                              |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `local`; dummy local-only values, never real AWS credentials                                                                   |
+| `REPOSITORY_MODE`                                          | `fixture` provides tiny demo analytics; database-backed analytics remain deferred                                              |
+| `SESSION_COOKIE_NAME`                                      | `bid_session`; identifier-style cookie name                                                                                    |
+| `SESSION_LIFETIME_SECONDS`                                 | 28800; validated range 60–604800                                                                                               |
+| `SESSION_COOKIE_SECURE`                                    | `false`; accepts only `true`/`false`; signed HttpOnly SameSite=Strict cookie; Secure=true requires HTTPS                       |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`                 | `http://host.docker.internal:11434/v1`, `ollama` (non-secret placeholder), `qwen3.5:9b`; explicit nonblank overrides supported |
+| `LLM_TIMEOUT_MS`                                           | 110000; model/probe accepts 1000–120000; product also enforces the turn deadline                                               |
+| `LLM_REASONING_EFFORT`, `LLM_TEMPERATURE`                  | Standard request options, default `none` / `0`, independently configurable for other models                                    |
+| `AUTH_SIGNING_SECRET`, `DEMO_PASSWORD_A/B`                 | Public local-demo defaults matching DEMO-ACCOUNTS.md; replace for shared deployment                                            |
 
 Three empty tables are provisioned: `<prefix>-identity`, `<prefix>-publisher-data`, `<prefix>-workflow`. Their `PK`/`SK` keys are **provisional foundation placeholders**, not committed future access-pattern design. The foundation identity TTL remains provisioned but is unused by authentication: **no sessions/token hashes are stored**. Init refuses incompatible existing keys/TTL and never silently deletes data to repair them.
 
@@ -139,7 +139,7 @@ For optional server-side tracing to an existing Langfuse project, see [Langfuse 
 services:
   api:
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
 ```
 
 Then run the probe with `docker compose -f compose.yaml -f compose.model-host.yaml run --rm --no-deps api node dist/commands/cli.js model:probe` and set a matching `http://host.docker.internal:<port>/v1` URL privately. The model server must listen on an interface reachable from Docker, not only host loopback; restrict access with network/firewall/authentication settings. No local model container is added here.

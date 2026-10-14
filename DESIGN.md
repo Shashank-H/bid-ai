@@ -13,23 +13,23 @@ description: |
   gradients—allowing color and type to carry the narrative. Large display
   headlines paired with generous whitespace communicate authority and focus.
 source:
-  url: "https://pubx.ai"
+  url: 'https://pubx.ai'
   pagesAnalyzed: 1
   extractedAt: 2026-10-13
   tokensMeasured: true
 colors:
-  primary: "#F05223"
-  accent: "#475467"
-  link: "#F37344"
-  canvas: "#FFFFFF"
-  on-primary: "#FEF4EE"
-  ink: "#101828"
-  body: "#475467"
-  muted: "#FEF4EE"
-  accent-1: "#E13615"
-  accent-2: "#0D6EFD"
-  accent-3: "#781D16"
-  accent-4: "#410B09"
+  primary: '#F05223'
+  accent: '#475467'
+  link: '#F37344'
+  canvas: '#FFFFFF'
+  on-primary: '#FEF4EE'
+  ink: '#101828'
+  body: '#475467'
+  muted: '#FEF4EE'
+  accent-1: '#E13615'
+  accent-2: '#0D6EFD'
+  accent-3: '#781D16'
+  accent-4: '#410B09'
 typography:
   display:
     fontFamily: Manrope
@@ -112,62 +112,62 @@ spacing:
   band: 108px
 elevationStrategy: color-blocking
 themes:
-  derived: dark   # the other theme is the site's measured palette
+  derived: dark # the other theme is the site's measured palette
   light:
-    bg: "#FFFFFF"
-    surface: "#F7F7F7"
-    surfaceRaised: "#EEEEEF"
-    text: "#101828"
-    textMuted: "#475467"
-    border: "#E2E3E5"
-    accent: "#F05223"
-    accentFg: "#000000"
-    focusRing: "#F05223"
+    bg: '#FFFFFF'
+    surface: '#F7F7F7'
+    surfaceRaised: '#EEEEEF'
+    text: '#101828'
+    textMuted: '#475467'
+    border: '#E2E3E5'
+    accent: '#F05223'
+    accentFg: '#000000'
+    focusRing: '#F05223'
     elevation: shadow
   dark:
-    bg: "#140C0A"
-    surface: "#221B19"
-    surfaceRaised: "#2E2725"
-    text: "#FEF8F6"
-    textMuted: "#A59E9C"
-    border: "#3A3331"
-    accent: "#F05223"
-    accentFg: "#0B0B0C"
-    focusRing: "#F05223"
-    elevation: "border+surface"
+    bg: '#140C0A'
+    surface: '#221B19'
+    surfaceRaised: '#2E2725'
+    text: '#FEF8F6'
+    textMuted: '#A59E9C'
+    border: '#3A3331'
+    accent: '#F05223'
+    accentFg: '#0B0B0C'
+    focusRing: '#F05223'
+    elevation: 'border+surface'
 components:
   button-primary:
-    typography: "{typography.body-md-strong}"
-    textColor: "{colors.muted}"
+    typography: '{typography.body-md-strong}'
+    textColor: '{colors.muted}'
     height: 44px
-    padding: "0px 16px 0px 16px"
-    backgroundColor: "{colors.primary}"
+    padding: '0px 16px 0px 16px'
+    backgroundColor: '{colors.primary}'
   card:
-    typography: "{typography.body-md}"
-    textColor: "{colors.body}"
-    padding: "128px 12px 128px 12px"
-    backgroundColor: "rgb(249, 250, 251)"
+    typography: '{typography.body-md}'
+    textColor: '{colors.body}'
+    padding: '128px 12px 128px 12px'
+    backgroundColor: 'rgb(249, 250, 251)'
   card-lg:
-    typography: "{typography.body-md}"
-    textColor: "{colors.body}"
-    padding: "128px 12px 128px 12px"
-    backgroundColor: "{colors.canvas}"
+    typography: '{typography.body-md}'
+    textColor: '{colors.body}'
+    padding: '128px 12px 128px 12px'
+    backgroundColor: '{colors.canvas}'
   navigation:
-    typography: "{typography.body-md}"
-    textColor: "{colors.body}"
+    typography: '{typography.body-md}'
+    textColor: '{colors.body}'
     height: 24px
   footer:
-    typography: "{typography.body-md}"
-    textColor: "{colors.body}"
-    padding: "64px 12px 48px 12px"
-    backgroundColor: "{colors.accent-4}"
+    typography: '{typography.body-md}'
+    textColor: '{colors.body}'
+    padding: '64px 12px 48px 12px'
+    backgroundColor: '{colors.accent-4}'
   link:
-    typography: "{typography.body-md}"
-    textColor: "{colors.accent-2}"
-    padding: "0px 12px 0px 12px"
+    typography: '{typography.body-md}'
+    textColor: '{colors.accent-2}'
+    padding: '0px 12px 0px 12px'
   link-sm:
-    typography: "{typography.body-md}"
-    textColor: "{colors.muted}"
+    typography: '{typography.body-md}'
+    textColor: '{colors.muted}'
 states:
   link-hover:
     target: link
@@ -180,8 +180,8 @@ states:
   other-focus:
     target: other
     state: focus
-    boxShadow: "rgba(13, 110, 253, 0.25) 0px 0px 0px 0.25rem"
-    borderColor: "rgb(134, 183, 254)"
+    boxShadow: 'rgba(13, 110, 253, 0.25) 0px 0px 0px 0.25rem'
+    borderColor: 'rgb(134, 183, 254)'
   other-disabled:
     target: other
     state: disabled
@@ -189,12 +189,12 @@ states:
   input-focus:
     target: input
     state: focus
-    boxShadow: "rgba(13, 110, 253, 0.25) 0px 0px 0px 0.25rem"
-    borderColor: "rgb(134, 183, 254)"
+    boxShadow: 'rgba(13, 110, 253, 0.25) 0px 0px 0px 0.25rem'
+    borderColor: 'rgb(134, 183, 254)'
   input-active:
     target: input
     state: active
-    filter: "brightness(90%)"
+    filter: 'brightness(90%)'
   button-disabled:
     target: button
     state: disabled
@@ -203,7 +203,7 @@ states:
   other-active:
     target: other
     state: active
-    backgroundColor: "rgb(182, 212, 254)"
+    backgroundColor: 'rgb(182, 212, 254)'
   nav-disabled:
     target: nav
     state: disabled
@@ -276,6 +276,7 @@ coverage:
 pubX's design system embodies a bold, modern brand that prioritizes clarity and trust in the advertising infrastructure space. The visual language is assertive and energetic, built on a sharp, minimalist aesthetic with no rounded corners, creating a sense of precision and technical confidence. The primary orange accent (`{colors.primary}` — `#F05223`) acts as a confident call-to-action element, while warm earth tones and deep burgundy accents create visual depth and sophistication. Typography is generous and legible, using the modern Manrope family exclusively. The system embraces flat design—no shadows or gradients—allowing color and type to carry the narrative. Large display headlines paired with generous whitespace communicate authority and focus.
 
 **Key Characteristics**
+
 - Sharp, right-angled geometry with zero border-radius throughout
 - Bold orange brand accent with warm supporting palette
 - Flat, color-driven hierarchy (no shadows or gradients)
@@ -287,18 +288,22 @@ pubX's design system embodies a bold, modern brand that prioritizes clarity and 
 ## 2. Color Palette & Roles
 
 ### Primary
+
 - **Primary Brand** (`{colors.primary}` — `#F05223`): CTA buttons, brand mark accent, hero elements, active states. The defining accent that commands attention.
 
 ### Interactive & Links
+
 - **Link** (`{colors.link}` — `#F37344`): Inline hyperlink text, secondary call-to-action emphasis.
 
 ### Accent & Decorative
+
 - **Accent / Dark Burgundy** (`{colors.accent-1}` — `#E13615`): Decorative accent, used in hero wave illustrations and brand graphics.
 - **Accent / Dark Burgundy** (`{colors.accent-3}` — `#781D16`): Decorative accent, part of hero hero band gradient system.
 - **Accent / Very Dark Burgundy** (`{colors.accent-4}` — `#410B09`): Decorative accent, deep tone in layered hero graphics and footer background.
 - **Accent / Blue** (`{colors.accent-2}` — `#0D6EFD`): Decorative accent, reserved for specific branded moments (not primary interactive use).
 
 ### Neutral Scale
+
 - **Canvas** (`{colors.canvas}` — `#FFFFFF`): Default page background, card surfaces, primary content areas.
 - **Ink** (`{colors.ink}` — `#101828`): Headings, primary body text, dominant text color on light backgrounds.
 - **Accent / Secondary** (`{colors.accent}` — `#475467`): Body copy, secondary text, supporting content on neutral backgrounds.
@@ -307,27 +312,29 @@ pubX's design system embodies a bold, modern brand that prioritizes clarity and 
 ## 3. Typography Rules
 
 ### Font Family
+
 **Primary Font:** Manrope (Google Fonts: https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap)  
 Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 (Extra-bold)  
 **Fallback Stack:** `Manrope, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
 
 ### Hierarchy
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|---|---|---|---|---|---|---|
-| Display | Manrope | 60px | 700 | 1.2 | 0px | Hero headlines, h1 equivalent; commanding presence |
-| Heading MD | Manrope | 36px | 700 | 1.22 | 0px | Section headings, h3 equivalent |
-| Heading SM | Manrope | 24px | 700 | 1.5 | 0px | Subheadings, h5 equivalent |
-| Heading XS | Manrope | 16px | 600 | 1.5 | 0px | Small headings, h6 equivalent |
-| Body XL | Manrope | 20px | 400 | 1.5 | 0px | Large body text, marketing copy |
-| Body XL Tight | Manrope | 20px | 400 | 1.2 | 0px | Large body text with compressed leading |
-| Body XL Strong | Manrope | 20px | 900 | 1.5 | 0px | Large body text, high-emphasis |
-| Body LG | Manrope | 18.67px | 700 | 1.5 | 0px | Medium-large body text, bold emphasis |
-| Body MD | Manrope | 16px | 400 | 1.5 | 0px | Default body text, standard paragraph |
-| Body MD Strong | Manrope | 16px | 600 | 2.75 | 0px | Standard body with semibold emphasis; loose leading |
-| Navigation | Manrope | 16px | 700 | 1.5 | 0px | Navigation menu links |
+| Role           | Font    | Size    | Weight | Line Height | Letter Spacing | Notes                                               |
+| -------------- | ------- | ------- | ------ | ----------- | -------------- | --------------------------------------------------- |
+| Display        | Manrope | 60px    | 700    | 1.2         | 0px            | Hero headlines, h1 equivalent; commanding presence  |
+| Heading MD     | Manrope | 36px    | 700    | 1.22        | 0px            | Section headings, h3 equivalent                     |
+| Heading SM     | Manrope | 24px    | 700    | 1.5         | 0px            | Subheadings, h5 equivalent                          |
+| Heading XS     | Manrope | 16px    | 600    | 1.5         | 0px            | Small headings, h6 equivalent                       |
+| Body XL        | Manrope | 20px    | 400    | 1.5         | 0px            | Large body text, marketing copy                     |
+| Body XL Tight  | Manrope | 20px    | 400    | 1.2         | 0px            | Large body text with compressed leading             |
+| Body XL Strong | Manrope | 20px    | 900    | 1.5         | 0px            | Large body text, high-emphasis                      |
+| Body LG        | Manrope | 18.67px | 700    | 1.5         | 0px            | Medium-large body text, bold emphasis               |
+| Body MD        | Manrope | 16px    | 400    | 1.5         | 0px            | Default body text, standard paragraph               |
+| Body MD Strong | Manrope | 16px    | 600    | 2.75        | 0px            | Standard body with semibold emphasis; loose leading |
+| Navigation     | Manrope | 16px    | 700    | 1.5         | 0px            | Navigation menu links                               |
 
 ### Principles
+
 - **Legibility First:** Generous line heights (1.2–2.75) ensure excellent readability at all scales.
 - **Single Typeface:** Manrope is used exclusively across the system—no secondary font. Hierarchy is achieved through size, weight, and color.
 - **High Contrast:** Text uses either `{colors.ink}` for maximum contrast on light backgrounds, or `{colors.on-primary}` on dark/branded surfaces.
@@ -339,6 +346,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 ### Buttons
 
 **Primary Button**
+
 - **Background:** `{colors.primary}` (`#F05223`)
 - **Text Color:** `{colors.on-primary}` (`#FEF4EE`)
 - **Font:** Manrope, 16px, weight 600
@@ -357,6 +365,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 ### Navigation
 
 **Default Navigation**
+
 - **Background:** Transparent (`rgba(0, 0, 0, 0)`)
 - **Text Color:** `{colors.accent}` (`#475467`)
 - **Font:** Manrope, 16px, weight 400 (inherited from nav role; links override to weight 700 via nav link semantics)
@@ -371,6 +380,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 ### Links
 
 **Inline Link (default)**
+
 - **Text Color:** `#0D6EFD` (blue link color, measured as `rgb(13, 110, 253)`)
 - **Background:** Transparent
 - **Font:** Manrope, 16px, weight 400
@@ -380,6 +390,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 - **Padding:** 0px 12px (horizontal padding observed)
 
 **Brand Link (footer/secondary contexts)**
+
 - **Text Color:** `{colors.on-primary}` (`#FEF4EE`)
 - **Background:** Transparent
 - **Font:** Manrope, 16px, weight 400
@@ -388,6 +399,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 ### Cards & Containers
 
 **Default Card (Light Background)**
+
 - **Background:** `#F9FAFB` (light gray surface)
 - **Text Color:** `{colors.accent}` (`#475467`)
 - **Font:** Manrope, 16px, weight 400
@@ -399,6 +411,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 - **Height:** 597px (measured at 1440px viewport)
 
 **Large Card (White Background)**
+
 - **Background:** `{colors.canvas}` (`#FFFFFF`)
 - **Text Color:** `{colors.accent}` (`#475467`)
 - **Font:** Manrope, 16px, weight 400
@@ -411,6 +424,7 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 ### Footer
 
 **Footer Container**
+
 - **Background:** `#410B09` (very dark burgundy, `{colors.accent-4}`)
 - **Text Color:** `{colors.accent}` (`#475467`)
 - **Font:** Manrope, 16px, weight 400
@@ -424,7 +438,9 @@ Weights available: 400 (Regular), 500 (Medium), 600 (Semibold), 700 (Bold), 900 
 ## 5. Layout Principles
 
 ### Spacing System
+
 The design uses a proportional scale built from a base unit of 4px:
+
 - **`{spacing.xxs}`** = 4px — Micro-spacing, internal component padding
 - **`{spacing.xs}`** = 12px — Small gaps, component-to-component spacing
 - **`{spacing.sm}`** = 20px — Standard section gap
@@ -437,12 +453,14 @@ The design uses a proportional scale built from a base unit of 4px:
 - **`{spacing.band}`** = 108px — Extra-large hero and feature sections
 
 **Usage Context:**
+
 - Component internal padding: `{spacing.xxs}` to `{spacing.xs}`
 - Section vertical separation: `{spacing.md}` to `{spacing.section}`
 - Hero blocks and feature sections: `{spacing.band}` or `{spacing.section}`
 - Page margins: `{spacing.xs}` on mobile, `{spacing.md}` at larger viewports
 
 ### Grid & Container
+
 - **Max Content Width:** 1280px (at 1440px viewport, container width 1256px content column; constrained at 1440px)
 - **Mobile Content Width:** 351px (at 375px viewport)
 - **Tablet Content Width:** 744px (at 768px viewport)
@@ -452,35 +470,41 @@ The design uses a proportional scale built from a base unit of 4px:
 - **Full-Width Blocks:** Hero bands, cards, and footer span edge-to-edge with 12px internal padding
 
 ### Whitespace Philosophy
+
 The system prioritizes generous vertical breathing room. Section padding is consistently large (128px top/bottom on content cards, 64px on footer), allowing content to feel spacious and authoritative. Horizontal spacing is compressed on mobile (12px padding) but maintains breathing room at desktop through max-width constraints rather than large margins. This creates a modern, uncluttered appearance that emphasizes content hierarchy and reading comfort.
 
 ### Border Radius Scale
+
 - **`{rounded.none}`** = 0px (applied to all interactive and container components: buttons, cards, images, overlays)
 
 All elements in this system are sharp-cornered. No rounded variants exist.
 
 ### Border Widths
+
 No border widths were extracted. The system uses flat design with no visible strokes or borders on primary components. Where borders appear (e.g., form inputs in focus state), they are applied via Bootstrap CSS variables (`var(--bs-success)`, `var(--bs-danger)`) rather than explicit border-width tokens.
 
 ## 6. Depth & Elevation
 
 The pubX design system employs **flat, color-blocking strategy** for depth. There are no box-shadows, no multi-layer elevation ladders, and no gradients. Depth and hierarchy are communicated exclusively through color, typography size/weight, and vertical spatial separation.
 
-| Level | Treatment | Use |
-|---|---|---|
+| Level       | Treatment                        | Use                                              |
+| ----------- | -------------------------------- | ------------------------------------------------ |
 | Base / Flat | No shadow; background color only | Cards, buttons, body text, default page surfaces |
-| None | Transparent or inherited | Navigation, links, overlays |
+| None        | Transparent or inherited         | Navigation, links, overlays                      |
 
 **Shadow Philosophy:**
 The system intentionally avoids shadows. No `box-shadow` values are declared on primary components. Where focus states appear in form inputs (Bootstrap-driven), shadows are minimal and use semi-transparent overlays (e.g., `rgba(13, 110, 253, 0.25) 0px 0px 0px 0.25rem`) rather than drop shadows, creating a subtle glow rather than lift.
 
 ### Opacity Levels
+
 Opacity adjustments are applied in specific interaction contexts:
+
 - **Hover (buttons, links):** Opacity reduced to 0.9 (slight dimming)
 - **Disabled (inputs, buttons):** Opacity reduced to 0.5–0.65 for reduced visual weight
 - **Focus (form inputs):** Opacity maintained at 1 or 0.65 depending on interaction phase; overlay box-shadow at `rgba(13, 110, 253, 0.25)` creates focus indication
 
 ### Z-index / Layering
+
 - **Base:** z-index 1–2 (default component stack)
 - **Standard:** z-index 9 (sticky/elevated components)
 - **Dropdown / Modal:** z-index 99 (menus, overlays, dropdowns above all content)
@@ -488,6 +512,7 @@ Opacity adjustments are applied in specific interaction contexts:
 ## 7. Do's and Don'ts
 
 ### Do
+
 - **Use sharp, right-angled geometry.** All components have 0px border-radius; maintain this consistency for a modern, technical feel.
 - **Rely on color and typography for hierarchy.** The system has no shadows—use bold weights, size shifts, and the primary orange to drive emphasis.
 - **Respect generous spacing.** Section padding is large (128px top/bottom); do not compress content to save space.
@@ -497,6 +522,7 @@ Opacity adjustments are applied in specific interaction contexts:
 - **Test at all breakpoints.** Navigation collapses at mobile; ensure button sizing and text sizes remain legible at 375px.
 
 ### Don't
+
 - **Round corners.** Every component is sharp; do not add `border-radius` to buttons, cards, or containers.
 - **Add drop shadows or layered depth effects.** Depth comes from color, position, and spacing—not shadows.
 - **Use secondary typefaces.** Manrope is the system's only font; no serif or monospace replacements.
@@ -510,26 +536,30 @@ Opacity adjustments are applied in specific interaction contexts:
 
 ### Breakpoints
 
-| Viewport | Content Width | Grid Columns | Nav Visible | Menu Toggle | Display Size | Body Size | Section Padding X |
-|---|---|---|---|---|---|---|---|
-| 375px (Mobile) | 351px | 3 | No (8 links shown but nav collapses) | Yes | 30px | 16px | 12px |
-| 768px (Tablet) | 744px | 7 | Yes (15 links) | No | 45px | 16px | 12px |
-| 1024px (Desktop) | 1000px | 7 | Yes (15 links) | No | 45px | 16px | 12px |
-| 1280px (Large Desktop) | 1256px | 8 | Yes (15 links) | No | 60px | 16px | 12px |
-| 1440px (Max Width) | 1280px | 8 | Yes (15 links) | No | 60px | 16px | 12px |
+| Viewport               | Content Width | Grid Columns | Nav Visible                          | Menu Toggle | Display Size | Body Size | Section Padding X |
+| ---------------------- | ------------- | ------------ | ------------------------------------ | ----------- | ------------ | --------- | ----------------- |
+| 375px (Mobile)         | 351px         | 3            | No (8 links shown but nav collapses) | Yes         | 30px         | 16px      | 12px              |
+| 768px (Tablet)         | 744px         | 7            | Yes (15 links)                       | No          | 45px         | 16px      | 12px              |
+| 1024px (Desktop)       | 1000px        | 7            | Yes (15 links)                       | No          | 45px         | 16px      | 12px              |
+| 1280px (Large Desktop) | 1256px        | 8            | Yes (15 links)                       | No          | 60px         | 16px      | 12px              |
+| 1440px (Max Width)     | 1280px        | 8            | Yes (15 links)                       | No          | 60px         | 16px      | 12px              |
 
 **Key Transitions:**
+
 - **375px → 768px:** Display size increases from 30px to 45px; grid expands from 3 to 7 columns; navigation becomes visible and menu toggle disappears.
 - **1024px → 1280px:** Display size increases from 45px to 60px; grid expands from 7 to 8 columns; content width expands.
 - **1440px+:** Content width caps at 1280px; no further expansion.
 
 ### Touch Targets
+
 Primary interactive elements (buttons, navigation links) are sized for touch:
+
 - **Button Height:** 44px (sufficient for finger tap)
 - **Link Padding:** 12px horizontal, implicit vertical padding via line-height (24px min.)
 - **Navigation Link Target:** Implicit clickable area via navigation container; 16px font and 24px line-height provide ample touch surface
 
 ### Collapsing Strategy
+
 - **Navigation:** At mobile (375px), the full navigation list collapses; a hamburger menu toggle appears. Links remain at 16px but are hidden in a mobile menu.
 - **Display Heading:** Reduces from 60px (desktop, `{typography.display}`) to 45px (tablet, `{typography.heading-md}` level) to 30px (mobile).
 - **Grid Layout:** Mobile uses 3-column grid; tablet/desktop use 7–8 columns. Content reflows but maintains 12px side padding.
@@ -538,6 +568,7 @@ Primary interactive elements (buttons, navigation links) are sized for touch:
 ## 9. Agent Prompt Guide
 
 ### Quick Color Reference
+
 - **Primary CTA Buttons:** Primary (`#F05223`)
 - **Primary Button Text:** On Primary (`#FEF4EE`)
 - **Page Background:** Canvas (`#FFFFFF`)
@@ -549,6 +580,7 @@ Primary interactive elements (buttons, navigation links) are sized for touch:
 - **Decorative Accents:** Red (`#E13615`), Blue (`#0D6EFD`), Dark Burgundy (`#781D16`)
 
 ### Iteration Guide
+
 1. **No rounded corners.** Every component uses `border-radius: 0px`. Buttons, cards, inputs, overlays—all sharp.
 2. **Use Manrope exclusively.** All text uses the Manrope typeface at weights 400, 600, 700, or 900. No serif or secondary fonts.
 3. **Primary orange is rare.** Reserve `#F05223` for primary CTAs, brand marks, and high-emphasis moments. Most text uses `#475467` or `#101828`.
@@ -577,115 +609,115 @@ Primary interactive elements (buttons, navigation links) are sized for touch:
 tokens:
   colors:
     primary:
-      value: "#F05223"
-      role: "Primary Brand / CTA"
+      value: '#F05223'
+      role: 'Primary Brand / CTA'
     accent:
-      value: "#475467"
-      role: "Secondary Accent / Body Text"
+      value: '#475467'
+      role: 'Secondary Accent / Body Text'
     link:
-      value: "#F37344"
-      role: "Link"
+      value: '#F37344'
+      role: 'Link'
     accent-1:
-      value: "#E13615"
-      role: "Decorative"
+      value: '#E13615'
+      role: 'Decorative'
     accent-2:
-      value: "#0D6EFD"
-      role: "Decorative"
+      value: '#0D6EFD'
+      role: 'Decorative'
     accent-3:
-      value: "#781D16"
-      role: "Decorative"
+      value: '#781D16'
+      role: 'Decorative'
     accent-4:
-      value: "#410B09"
-      role: "Decorative / Footer Background"
+      value: '#410B09'
+      role: 'Decorative / Footer Background'
     canvas:
-      value: "#FFFFFF"
-      role: "Background / Canvas"
+      value: '#FFFFFF'
+      role: 'Background / Canvas'
     ink:
-      value: "#101828"
-      role: "Headings / Primary Text"
+      value: '#101828'
+      role: 'Headings / Primary Text'
     on-primary:
-      value: "#FEF4EE"
-      role: "Muted / Text on Primary"
+      value: '#FEF4EE'
+      role: 'Muted / Text on Primary'
   typography:
     display:
-      family: "Manrope"
-      size: "60px"
+      family: 'Manrope'
+      size: '60px'
       weight: 700
       lineHeight: 1.2
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     heading-md:
-      family: "Manrope"
-      size: "36px"
+      family: 'Manrope'
+      size: '36px'
       weight: 700
       lineHeight: 1.22
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     heading-sm:
-      family: "Manrope"
-      size: "24px"
+      family: 'Manrope'
+      size: '24px'
       weight: 700
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     heading-xs:
-      family: "Manrope"
-      size: "16px"
+      family: 'Manrope'
+      size: '16px'
       weight: 600
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     body-md:
-      family: "Manrope"
-      size: "16px"
+      family: 'Manrope'
+      size: '16px'
       weight: 400
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     nav:
-      family: "Manrope"
-      size: "16px"
+      family: 'Manrope'
+      size: '16px'
       weight: 700
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     body-xl:
-      family: "Manrope"
-      size: "20px"
+      family: 'Manrope'
+      size: '20px'
       weight: 400
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     body-xl-tight:
-      family: "Manrope"
-      size: "20px"
+      family: 'Manrope'
+      size: '20px'
       weight: 400
       lineHeight: 1.2
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     body-lg:
-      family: "Manrope"
-      size: "18.67px"
+      family: 'Manrope'
+      size: '18.67px'
       weight: 700
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     body-md-strong:
-      family: "Manrope"
-      size: "16px"
+      family: 'Manrope'
+      size: '16px'
       weight: 600
       lineHeight: 2.75
-      letterSpacing: "0px"
+      letterSpacing: '0px'
     body-xl-strong:
-      family: "Manrope"
-      size: "20px"
+      family: 'Manrope'
+      size: '20px'
       weight: 900
       lineHeight: 1.5
-      letterSpacing: "0px"
+      letterSpacing: '0px'
   spacing:
-    xxs: "4px"
-    xs: "12px"
-    sm: "20px"
-    md: "24px"
-    lg: "32px"
-    xl: "48px"
-    xxl: "64px"
-    xxxl: "68px"
-    section: "72px"
-    band: "108px"
+    xxs: '4px'
+    xs: '12px'
+    sm: '20px'
+    md: '24px'
+    lg: '32px'
+    xl: '48px'
+    xxl: '64px'
+    xxxl: '68px'
+    section: '72px'
+    band: '108px'
   rounded:
-    none: "0px"
+    none: '0px'
   zIndex:
     base: 1
     base-elevated: 2

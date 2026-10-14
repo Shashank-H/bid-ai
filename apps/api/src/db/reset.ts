@@ -12,16 +12,23 @@ export interface ResetOptions {
 }
 
 export function assertResetAllowed(settings: DatabaseSettings, options: ResetOptions): void {
-  if (localEndpoint(options.endpoint) !== localEndpoint(settings.endpoint)) throw new Error('RESET_REFUSED: endpoint must match configured local database');
+  if (localEndpoint(options.endpoint) !== localEndpoint(settings.endpoint))
+    throw new Error('RESET_REFUSED: endpoint must match configured local database');
 
   TablePrefixSchema.parse(options.prefix);
 
-  if (options.prefix !== settings.tablePrefix) throw new Error('RESET_REFUSED: prefix must match configured project prefix');
-  if (options.confirmation !== `DELETE ${options.prefix}`) throw new Error('RESET_REFUSED: explicit confirmation must be DELETE <prefix>');
+  if (options.prefix !== settings.tablePrefix)
+    throw new Error('RESET_REFUSED: prefix must match configured project prefix');
+  if (options.confirmation !== `DELETE ${options.prefix}`)
+    throw new Error('RESET_REFUSED: explicit confirmation must be DELETE <prefix>');
 }
 
 /** Deletes only the three explicitly configured project tables; never the volume. */
-export async function resetDatabase(client: DynamoDBClient, settings: DatabaseSettings, options: ResetOptions): Promise<{ tables: string[] }> {
+export async function resetDatabase(
+  client: DynamoDBClient,
+  settings: DatabaseSettings,
+  options: ResetOptions,
+): Promise<{ tables: string[] }> {
   assertResetAllowed(settings, options);
 
   const signal = AbortSignal.timeout(15_000);
@@ -35,7 +42,9 @@ export async function resetDatabase(client: DynamoDBClient, settings: DatabaseSe
 
     while (!signal.aborted) {
       try {
-        await client.send(new DescribeTableCommand({ TableName: table.name }), { abortSignal: signal });
+        await client.send(new DescribeTableCommand({ TableName: table.name }), {
+          abortSignal: signal,
+        });
       } catch (error) {
         if (error instanceof Error && error.name === 'ResourceNotFoundException') break;
         throw error;

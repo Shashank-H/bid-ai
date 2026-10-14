@@ -18,9 +18,11 @@ it('keeps liveness independent from unavailable readiness and recovers on the ne
 });
 
 it('does not expose dependency error details in public responses', async () => {
-  const app = buildApp({ checkReady: async () => {
-    throw new Error('private-key-secret-sentinel');
-  } });
+  const app = buildApp({
+    checkReady: async () => {
+      throw new Error('private-key-secret-sentinel');
+    },
+  });
 
   try {
     const result = await app.inject('/api/health/ready');

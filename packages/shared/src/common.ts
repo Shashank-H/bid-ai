@@ -9,14 +9,19 @@ export const AmountSchema = z.number().finite().nonnegative();
 export const RatioSchema = z.number().min(0).max(1).nullable();
 
 // Tool input deliberately has no publisher: authorization supplies it separately.
-export const PeriodInputSchema = z.strictObject({
-  startDate: DateSchema,
-  endDate: DateSchema,
-}).refine(({ startDate, endDate }) => startDate <= endDate, {
-  message: 'Period end must not precede start',
-}).refine(({ startDate, endDate }) =>
-  (Date.parse(endDate) - Date.parse(startDate)) / 86_400_000 < 90, {
-  message: 'Period may cover at most 90 UTC dates',
-});
+export const PeriodInputSchema = z
+  .strictObject({
+    startDate: DateSchema,
+    endDate: DateSchema,
+  })
+  .refine(({ startDate, endDate }) => startDate <= endDate, {
+    message: 'Period end must not precede start',
+  })
+  .refine(
+    ({ startDate, endDate }) => (Date.parse(endDate) - Date.parse(startDate)) / 86_400_000 < 90,
+    {
+      message: 'Period may cover at most 90 UTC dates',
+    },
+  );
 
 export type PeriodInput = z.infer<typeof PeriodInputSchema>;

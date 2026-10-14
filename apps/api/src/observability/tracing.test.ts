@@ -5,7 +5,11 @@ import { spawn } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import OpenAI from 'openai';
 import { trace } from '@opentelemetry/api';
-import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import {
+  BasicTracerProvider,
+  InMemorySpanExporter,
+  SimpleSpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 import type { SpanExporter, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { initializeTracing, maskTraceData } from './tracing.js';
 import type { TracingRuntime } from './tracing.js';
@@ -20,7 +24,10 @@ type WireSpan = {
   traceId: string;
   spanId: string;
   parentSpanId?: string;
-  attributes: Array<{ key: string; value: { stringValue?: string; intValue?: string; boolValue?: boolean } }>;
+  attributes: Array<{
+    key: string;
+    value: { stringValue?: string; intValue?: string; boolValue?: boolean };
+  }>;
   events?: unknown[];
 };
 
@@ -37,39 +44,68 @@ function attribute(span: WireSpan, key: string) {
 }
 
 function allSpans() {
-  return collected.flatMap((body) => body.resourceSpans.flatMap((resource) => resource.scopeSpans.flatMap((scope) => scope.spans)));
+  return collected.flatMap((body) =>
+    body.resourceSpans.flatMap((resource) => resource.scopeSpans.flatMap((scope) => scope.spans)),
+  );
 }
 
 function chunk(delta: Record<string, unknown>, finish: string | null = null) {
-  return { id: 'chat-test', object: 'chat.completion.chunk', created: 1, model: options.model,
-    choices: [{ index: 0, delta, finish_reason: finish }] };
+  return {
+    id: 'chat-test',
+    object: 'chat.completion.chunk',
+    created: 1,
+    model: options.model,
+    choices: [{ index: 0, delta, finish_reason: finish }],
+  };
 }
 
 function sse(chunks: unknown[]) {
-  return new Response(chunks.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n', {
-    headers: { 'content-type': 'text/event-stream' },
-  });
+  return new Response(
+    chunks.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n',
+    {
+      headers: { 'content-type': 'text/event-stream' },
+    },
+  );
 }
 
 function scriptedFetch(withUsage = true): typeof fetch {
   let step = 0;
 
   return async (_request, init) => {
-    const body = JSON.parse(String(init?.body)) as { stream_options?: unknown; messages?: unknown[] };
+    const body = JSON.parse(String(init?.body)) as {
+      stream_options?: unknown;
+      messages?: unknown[];
+    };
     expect(body.stream_options).toEqual({ include_usage: true });
 
-    const usage = withUsage ? [{ choices: [], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }] : [];
+    const usage = withUsage
+      ? [{ choices: [], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } }]
+      : [];
 
     if (++step === 2) {
       return sse([
-        chunk({ tool_calls: [{ index: 0, id: 'call_echo', type: 'function', function: { name: 'probe_echo', arguments: '{"message":"compatibility check"}' } }] }),
-        chunk({}, 'tool_calls'), ...usage,
+        chunk({
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_echo',
+              type: 'function',
+              function: { name: 'probe_echo', arguments: '{"message":"compatibility check"}' },
+            },
+          ],
+        }),
+        chunk({}, 'tool_calls'),
+        ...usage,
       ]);
     }
 
     return sse([
-      chunk({ content: `streaming works ${secret} somebody@example.test`, reasoning_content: 'private chain of thought' }),
-      chunk({}, 'stop'), ...usage,
+      chunk({
+        content: `streaming works ${secret} somebody@example.test`,
+        reasoning_content: 'private chain of thought',
+      }),
+      chunk({}, 'stop'),
+      ...usage,
     ]);
   };
 }
@@ -82,25 +118,45 @@ it('keeps tracing explicitly opt-in and validates enabled configuration without 
   await expect(disabled.probe(async () => 'untraced')).resolves.toBe('untraced');
   await disabled.shutdown();
 
-  expect(() => readTracingSettings({ LANGFUSE_TRACING_ENABLED: 'yes' })).toThrow(ConfigurationError);
-  expect(() => readTracingSettings({ LANGFUSE_TRACING_ENABLED: 'true' })).toThrow(ConfigurationError);
+  expect(() => readTracingSettings({ LANGFUSE_TRACING_ENABLED: 'yes' })).toThrow(
+    ConfigurationError,
+  );
+  expect(() => readTracingSettings({ LANGFUSE_TRACING_ENABLED: 'true' })).toThrow(
+    ConfigurationError,
+  );
 
-  for (const change of [{ LANGFUSE_BASE_URL: 'https://user:secret@example.test' },
-    { LANGFUSE_BASE_URL: 'https://example.test?token=secret' }, { LANGFUSE_TIMEOUT_MS: '0' },
-    { LANGFUSE_TRACING_ENVIRONMENT: 'contains space' }, { LANGFUSE_SECRET_KEY: ' ' }]) {
-    expect(() => readTracingSettings({ LANGFUSE_TRACING_ENABLED: 'true', LANGFUSE_BASE_URL: 'https://example.test',
-      LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey, ...change })).toThrow('INVALID_CONFIGURATION');
+  for (const change of [
+    { LANGFUSE_BASE_URL: 'https://user:secret@example.test' },
+    { LANGFUSE_BASE_URL: 'https://example.test?token=secret' },
+    { LANGFUSE_TIMEOUT_MS: '0' },
+    { LANGFUSE_TRACING_ENVIRONMENT: 'contains space' },
+    { LANGFUSE_SECRET_KEY: ' ' },
+  ]) {
+    expect(() =>
+      readTracingSettings({
+        LANGFUSE_TRACING_ENABLED: 'true',
+        LANGFUSE_BASE_URL: 'https://example.test',
+        LANGFUSE_PUBLIC_KEY: publicKey,
+        LANGFUSE_SECRET_KEY: secretKey,
+        ...change,
+      }),
+    ).toThrow('INVALID_CONFIGURATION');
   }
 });
 
 it('masks nested credentials, private reasoning, JSON tool arguments and configured secrets', () => {
-  const masked = maskTraceData({
-    credentialHash: secret,
-    messages: [{ content: `hello ${secret} person@example.test`, reasoning_content: 'private chain' }],
-    arguments: JSON.stringify({ password: 'private', reasoning: 'private', message: 'safe' }),
-    text: 'before<think>inline-private</think>after',
-    unterminated: 'before<think>unfinished-private',
-  }, [secret]);
+  const masked = maskTraceData(
+    {
+      credentialHash: secret,
+      messages: [
+        { content: `hello ${secret} person@example.test`, reasoning_content: 'private chain' },
+      ],
+      arguments: JSON.stringify({ password: 'private', reasoning: 'private', message: 'safe' }),
+      text: 'before<think>inline-private</think>after',
+      unterminated: 'before<think>unfinished-private',
+    },
+    [secret],
+  );
   const text = JSON.stringify(masked);
 
   expect(text).not.toContain(secret);
@@ -113,15 +169,28 @@ it('masks nested credentials, private reasoning, JSON tool arguments and configu
 });
 
 it('retains reasoning effort, token counts and sampling settings while masking private reasoning', () => {
-  const masked = maskTraceData({ reasoningEffort: 'none', reasoning_effort: 'low', temperature: 0.2,
-    usage: { completion_tokens_details: { reasoning_tokens: 42 } }, reasoning_content: 'private chain',
-    thinking: 'private chain', analysis: 'private chain' });
+  const masked = maskTraceData({
+    reasoningEffort: 'none',
+    reasoning_effort: 'low',
+    temperature: 0.2,
+    usage: { completion_tokens_details: { reasoning_tokens: 42 } },
+    reasoning_content: 'private chain',
+    thinking: 'private chain',
+    analysis: 'private chain',
+  });
 
-  expect(masked).toMatchObject({ reasoningEffort: 'none', reasoning_effort: 'low', temperature: 0.2,
-    usage: { completion_tokens_details: { reasoning_tokens: 42 } }, reasoning_content: '[REDACTED]',
-    thinking: '[REDACTED]', analysis: '[REDACTED]' });
-  expect(maskTraceData({ reasoning_effort: 'private chain', reasoning_tokens: 'private chain' }))
-    .toEqual({ reasoning_effort: '[REDACTED]', reasoning_tokens: '[REDACTED]' });
+  expect(masked).toMatchObject({
+    reasoningEffort: 'none',
+    reasoning_effort: 'low',
+    temperature: 0.2,
+    usage: { completion_tokens_details: { reasoning_tokens: 42 } },
+    reasoning_content: '[REDACTED]',
+    thinking: '[REDACTED]',
+    analysis: '[REDACTED]',
+  });
+  expect(
+    maskTraceData({ reasoning_effort: 'private chain', reasoning_tokens: 'private chain' }),
+  ).toEqual({ reasoning_effort: '[REDACTED]', reasoning_tokens: '[REDACTED]' });
 });
 
 it('fails closed for tracing when another provider owns global export', async () => {
@@ -131,11 +200,19 @@ it('fails closed for tracing when another provider owns global export', async ()
   const registered = trace.getTracerProvider();
 
   try {
-    const tracing = initializeTracing({ enabled: true, baseURL: 'http://unused.invalid', publicKey, secretKey,
-      environment: 'test', timeoutMs: 200 });
+    const tracing = initializeTracing({
+      enabled: true,
+      baseURL: 'http://unused.invalid',
+      publicKey,
+      secretKey,
+      environment: 'test',
+      timeoutMs: 200,
+    });
 
     expect(tracing.enabled).toBe(false);
-    await expect(runModelProbe({ ...options, tracing, fetch: scriptedFetch() })).resolves.toMatchObject({ compatible: true });
+    await expect(
+      runModelProbe({ ...options, tracing, fetch: scriptedFetch() }),
+    ).resolves.toMatchObject({ compatible: true });
     await tracing.shutdown();
 
     expect(trace.getTracerProvider()).toBe(registered);
@@ -149,13 +226,25 @@ it('fails closed for tracing when another provider owns global export', async ()
 it('cleans up owned globals so a sequential runtime exports to its own processor', async () => {
   const spans: ReadableSpan[] = [];
   const exporter: SpanExporter = {
-    export: (batch, callback) => { spans.push(...batch); callback({ code: 0 }); },
+    export: (batch, callback) => {
+      spans.push(...batch);
+      callback({ code: 0 });
+    },
     shutdown: async () => {},
   };
 
   for (let i = 0; i < 2; i++) {
-    const runtime = initializeTracing({ enabled: true, baseURL: 'http://unused.invalid', publicKey, secretKey,
-      environment: 'test', timeoutMs: 200 }, { exporter, secrets: [secret] });
+    const runtime = initializeTracing(
+      {
+        enabled: true,
+        baseURL: 'http://unused.invalid',
+        publicKey,
+        secretKey,
+        environment: 'test',
+        timeoutMs: 200,
+      },
+      { exporter, secrets: [secret] },
+    );
     expect(runtime.enabled).toBe(true);
     await runModelProbe({ ...options, tracing: runtime, fetch: scriptedFetch() });
     await runtime.shutdown();
@@ -200,10 +289,19 @@ describe('actual Langfuse OTLP export', () => {
     await once(server, 'listening');
 
     const address = server.address();
-    if (!address || typeof address === 'string') throw new Error('Test collector address unavailable');
+    if (!address || typeof address === 'string')
+      throw new Error('Test collector address unavailable');
     url = `http://127.0.0.1:${address.port}`;
-    tracing = initializeTracing(readTracingSettings({ LANGFUSE_TRACING_ENABLED: 'true', LANGFUSE_BASE_URL: url,
-      LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey, LANGFUSE_TIMEOUT_MS: '200' }), { secrets: [secret] });
+    tracing = initializeTracing(
+      readTracingSettings({
+        LANGFUSE_TRACING_ENABLED: 'true',
+        LANGFUSE_BASE_URL: url,
+        LANGFUSE_PUBLIC_KEY: publicKey,
+        LANGFUSE_SECRET_KEY: secretKey,
+        LANGFUSE_TIMEOUT_MS: '200',
+      }),
+      { secrets: [secret] },
+    );
   });
 
   afterAll(async () => {
@@ -213,7 +311,9 @@ describe('actual Langfuse OTLP export', () => {
   });
 
   it('exports a coherent root, three generations and sibling echo tool with streamed usage', async () => {
-    await expect(runModelProbe({ ...options, tracing, fetch: scriptedFetch() })).resolves.toMatchObject({ compatible: true });
+    await expect(
+      runModelProbe({ ...options, tracing, fetch: scriptedFetch() }),
+    ).resolves.toMatchObject({ compatible: true });
     await tracing.flush();
 
     const spans = allSpans();
@@ -224,7 +324,10 @@ describe('actual Langfuse OTLP export', () => {
 
     const children = spans.filter((span) => span.parentSpanId === root?.spanId);
     expect(children.map((span) => span.name).sort()).toEqual([
-      'execute-probe-echo', 'streaming-check', 'tool-call-check', 'tool-result-continuation',
+      'execute-probe-echo',
+      'streaming-check',
+      'tool-call-check',
+      'tool-result-continuation',
     ]);
     expect(new Set(spans.map((span) => span.traceId)).size).toBe(1);
     expect(attribute(root!, 'langfuse.observation.input')).toContain('streaming');
@@ -251,16 +354,47 @@ describe('actual Langfuse OTLP export', () => {
 
   it('records request context and structured HTTP errors before any model output exists', async () => {
     const start = allSpans().length;
-    const client = new OpenAI({ baseURL: options.baseURL, apiKey: secret, maxRetries: 0,
-      fetch: async () => new Response(JSON.stringify({ error: { code: 'unsupported_parameter', type: 'invalid_request_error',
-        param: 'max_tokens', message: `Use max_completion_tokens, not max_tokens. ${secret}` } }),
-      { status: 400, headers: { 'content-type': 'application/json', 'x-request-id': 'req-diagnostic-test' } }) });
+    const client = new OpenAI({
+      baseURL: options.baseURL,
+      apiKey: secret,
+      maxRetries: 0,
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'unsupported_parameter',
+              type: 'invalid_request_error',
+              param: 'max_tokens',
+              message: `Use max_completion_tokens, not max_tokens. ${secret}`,
+            },
+          }),
+          {
+            status: 400,
+            headers: { 'content-type': 'application/json', 'x-request-id': 'req-diagnostic-test' },
+          },
+        ),
+    });
 
-    await expect(tracing.turn({ conversationId: 'conversation-diagnostics', turnId: 'turn-diagnostics', publisherId: 'publisher-a' },
-      () => tracing.generation('failed-request', client, async (observed) => {
-        await observed.chat.completions.create({ model: 'reasoning-model', messages: [{ role: 'user', content: 'hello' }],
-          stream: true, max_tokens: 64, reasoning_effort: 'low', temperature: 0 });
-      }))).rejects.toMatchObject({ status: 400 });
+    await expect(
+      tracing.turn(
+        {
+          conversationId: 'conversation-diagnostics',
+          turnId: 'turn-diagnostics',
+          publisherId: 'publisher-a',
+        },
+        () =>
+          tracing.generation('failed-request', client, async (observed) => {
+            await observed.chat.completions.create({
+              model: 'reasoning-model',
+              messages: [{ role: 'user', content: 'hello' }],
+              stream: true,
+              max_tokens: 64,
+              reasoning_effort: 'low',
+              temperature: 0,
+            });
+          }),
+      ),
+    ).rejects.toMatchObject({ status: 400 });
     await tracing.flush();
 
     const spans = allSpans().slice(start);
@@ -268,12 +402,20 @@ describe('actual Langfuse OTLP export', () => {
     const generation = spans.find((span) => span.name === 'failed-request')!;
     expect(attribute(generation, 'langfuse.observation.level')).toBe('ERROR');
     expect(attribute(generation, 'langfuse.observation.model.name')).toBe('reasoning-model');
-    expect(attribute(generation, 'langfuse.observation.model.parameters')).toContain('"reasoning_effort":"low"');
-    expect(attribute(generation, 'langfuse.observation.model.parameters')).toContain('"temperature":0');
+    expect(attribute(generation, 'langfuse.observation.model.parameters')).toContain(
+      '"reasoning_effort":"low"',
+    );
+    expect(attribute(generation, 'langfuse.observation.model.parameters')).toContain(
+      '"temperature":0',
+    );
     expect(attribute(generation, 'langfuse.observation.input')).toContain('hello');
     expect(attribute(generation, 'langfuse.observation.output')).toContain('unsupported_parameter');
-    expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain('req-diagnostic-test');
-    expect(attribute(generation, 'langfuse.observation.status_message')).toContain('max_completion_tokens');
+    expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain(
+      'req-diagnostic-test',
+    );
+    expect(attribute(generation, 'langfuse.observation.status_message')).toContain(
+      'max_completion_tokens',
+    );
     expect(JSON.stringify(spans)).not.toContain(secret);
     expect(JSON.stringify(spans)).not.toContain(secretKey);
   });
@@ -282,34 +424,80 @@ describe('actual Langfuse OTLP export', () => {
     const start = allSpans().length;
     const appLog = vi.spyOn(console, 'error').mockImplementation(() => {});
     const modelServer = createServer((_request, response) => {
-      response.writeHead(400, { 'content-type': 'application/json', 'x-request-id': 'req-model-runner' });
-      response.end(JSON.stringify({ error: { code: 'unsupported_parameter', type: 'invalid_request_error', param: 'max_tokens',
-        message: `Unsupported max_tokens. ${secret}` } }));
+      response.writeHead(400, {
+        'content-type': 'application/json',
+        'x-request-id': 'req-model-runner',
+      });
+      response.end(
+        JSON.stringify({
+          error: {
+            code: 'unsupported_parameter',
+            type: 'invalid_request_error',
+            param: 'max_tokens',
+            message: `Unsupported max_tokens. ${secret}`,
+          },
+        }),
+      );
     });
     modelServer.listen(0, '127.0.0.1');
     await once(modelServer, 'listening');
 
     try {
       const address = modelServer.address();
-      if (!address || typeof address === 'string') throw new Error('Test provider address unavailable');
-      const run = modelRunner({ LLM_BASE_URL: `http://127.0.0.1:${address.port}/v1`, LLM_API_KEY: secret,
-        LLM_MODEL: 'test-model' }, tracing);
-      await expect(tracing.turn({ conversationId: 'agent-conversation', turnId: 'agent-turn', publisherId: 'publisher-a' },
-        () => run(initialState('agent-turn', [{ role: 'user', content: 'Inspect my revenue.' }]), new AbortController().signal, () => {},
-          { conversationId: 'agent-conversation', turnId: 'agent-turn', correlationId: 'test-correlation' })))
-        .rejects.toMatchObject({ code: 'MODEL_INCOMPATIBLE', diagnostics: { stage: 'request', httpStatus: 400 } });
+      if (!address || typeof address === 'string')
+        throw new Error('Test provider address unavailable');
+      const run = modelRunner(
+        {
+          LLM_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
+          LLM_API_KEY: secret,
+          LLM_MODEL: 'test-model',
+        },
+        tracing,
+      );
+      await expect(
+        tracing.turn(
+          {
+            conversationId: 'agent-conversation',
+            turnId: 'agent-turn',
+            publisherId: 'publisher-a',
+          },
+          () =>
+            run(
+              initialState('agent-turn', [{ role: 'user', content: 'Inspect my revenue.' }]),
+              new AbortController().signal,
+              () => {},
+              {
+                conversationId: 'agent-conversation',
+                turnId: 'agent-turn',
+                correlationId: 'test-correlation',
+              },
+            ),
+        ),
+      ).rejects.toMatchObject({
+        code: 'MODEL_INCOMPATIBLE',
+        diagnostics: { stage: 'request', httpStatus: 400 },
+      });
       await tracing.flush();
 
       const spans = allSpans().slice(start);
-      expect(spans.map((span) => span.name).sort()).toEqual(['investigation-model', 'publisher-investigation']);
-      expect(spans.every((span) => attribute(span, 'langfuse.observation.level') === 'ERROR')).toBe(true);
+      expect(spans.map((span) => span.name).sort()).toEqual([
+        'investigation-model',
+        'publisher-investigation',
+      ]);
+      expect(spans.every((span) => attribute(span, 'langfuse.observation.level') === 'ERROR')).toBe(
+        true,
+      );
       const generation = spans.find((span) => span.name === 'investigation-model')!;
       const root = spans.find((span) => span.name === 'publisher-investigation')!;
       expect(generation.parentSpanId).toBe(root.spanId);
       expect(attribute(generation, 'langfuse.observation.model.name')).toBe('test-model');
       expect(attribute(generation, 'langfuse.observation.input')).toContain('Inspect my revenue.');
-      expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain('req-model-runner');
-      expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain('test-correlation');
+      expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain(
+        'req-model-runner',
+      );
+      expect(attribute(generation, 'langfuse.observation.metadata.error')).toContain(
+        'test-correlation',
+      );
       expect(attribute(root, 'langfuse.observation.output')).toContain('unsupported_parameter');
       expect(attribute(root, 'langfuse.observation.output')).not.toContain('"finished":true');
       expect(JSON.stringify(spans)).not.toContain(secret);
@@ -324,24 +512,44 @@ describe('actual Langfuse OTLP export', () => {
 
   it('retains partial output and usage when application validation rejects a completed stream', async () => {
     const start = allSpans().length;
-    const client = new OpenAI({ baseURL: options.baseURL, apiKey: secret, maxRetries: 0,
-      fetch: async () => sse([chunk({ content: `partial ${secret}` }), chunk({}, 'length'),
-        { choices: [], usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 } }]) });
+    const client = new OpenAI({
+      baseURL: options.baseURL,
+      apiKey: secret,
+      maxRetries: 0,
+      fetch: async () =>
+        sse([
+          chunk({ content: `partial ${secret}` }),
+          chunk({}, 'length'),
+          { choices: [], usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 } },
+        ]),
+    });
     const error = new HttpError(502, 'MODEL_INCOMPATIBLE', 'Completion was truncated.');
 
-    await expect(tracing.generation('failed-validation', client, async (observed) => {
-      const stream = await observed.chat.completions.create({ model: options.model, messages: [{ role: 'user', content: 'hello' }], stream: true });
-      for await (const _chunk of stream) { /* Consume before validating the finish reason. */ }
-      throw error;
-    })).rejects.toBe(error);
+    await expect(
+      tracing.generation('failed-validation', client, async (observed) => {
+        const stream = await observed.chat.completions.create({
+          model: options.model,
+          messages: [{ role: 'user', content: 'hello' }],
+          stream: true,
+        });
+        for await (const _chunk of stream) {
+          /* Consume before validating the finish reason. */
+        }
+        throw error;
+      }),
+    ).rejects.toBe(error);
     await tracing.flush();
 
-    const generation = allSpans().slice(start).find((span) => span.name === 'failed-validation')!;
+    const generation = allSpans()
+      .slice(start)
+      .find((span) => span.name === 'failed-validation')!;
     expect(attribute(generation, 'langfuse.observation.level')).toBe('ERROR');
     expect(attribute(generation, 'langfuse.observation.output')).toContain('partial');
     expect(attribute(generation, 'langfuse.observation.metadata.finishReason')).toBe('length');
     expect(attribute(generation, 'langfuse.observation.usage_details')).toContain('7');
-    expect(attribute(generation, 'langfuse.observation.status_message')).toContain('Completion was truncated');
+    expect(attribute(generation, 'langfuse.observation.status_message')).toContain(
+      'Completion was truncated',
+    );
     expect(JSON.stringify(generation)).not.toContain(secret);
   });
 
@@ -354,7 +562,9 @@ describe('actual Langfuse OTLP export', () => {
         const wire = await response.text();
         const modified = wire.replace(/data: (.+)\n/g, (line, json: string) => {
           if (json === '[DONE]') return line;
-          const value = JSON.parse(json) as { choices: Array<{ delta: { content?: string; tool_calls?: unknown[] } }> };
+          const value = JSON.parse(json) as {
+            choices: Array<{ delta: { content?: string; tool_calls?: unknown[] } }>;
+          };
 
           for (const choice of value.choices) {
             if (choice.delta.content) choice.delta.tool_calls = [];
@@ -367,8 +577,12 @@ describe('actual Langfuse OTLP export', () => {
       };
     };
 
-    await expect(runModelProbe({ ...options, fetch: fetcher() })).resolves.toMatchObject({ compatible: true });
-    await expect(runModelProbe({ ...options, tracing, fetch: fetcher() })).resolves.toMatchObject({ compatible: true });
+    await expect(runModelProbe({ ...options, fetch: fetcher() })).resolves.toMatchObject({
+      compatible: true,
+    });
+    await expect(runModelProbe({ ...options, tracing, fetch: fetcher() })).resolves.toMatchObject({
+      compatible: true,
+    });
     await tracing.flush();
   });
 
@@ -400,11 +614,15 @@ describe('actual Langfuse OTLP export', () => {
 
   it('sanitizes provider errors and closes aborted/invalid streaming generations', async () => {
     const start = allSpans().length;
-    const failureFetch: typeof fetch = async () => new Response(`{"error":{"message":"Bearer ${secret}; provider rejected credentials"}}`, {
-      status: 401, headers: { 'content-type': 'application/json' },
-    });
+    const failureFetch: typeof fetch = async () =>
+      new Response(`{"error":{"message":"Bearer ${secret}; provider rejected credentials"}}`, {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      });
 
-    await expect(runModelProbe({ ...options, tracing, fetch: failureFetch })).rejects.toMatchObject({ code: 'MODEL_AUTH_FAILED' });
+    await expect(runModelProbe({ ...options, tracing, fetch: failureFetch })).rejects.toMatchObject(
+      { code: 'MODEL_AUTH_FAILED' },
+    );
     await tracing.flush();
 
     const failureSpans = allSpans().slice(start);
@@ -413,8 +631,13 @@ describe('actual Langfuse OTLP export', () => {
     expect(JSON.stringify(failureSpans)).not.toContain(secret);
 
     const malformedStart = allSpans().length;
-    await expect(runModelProbe({ ...options, tracing, fetch: async () => sse([chunk({ content: 'x' }, 'length')]) }))
-      .rejects.toMatchObject({ code: 'MODEL_PROTOCOL_INVALID' });
+    await expect(
+      runModelProbe({
+        ...options,
+        tracing,
+        fetch: async () => sse([chunk({ content: 'x' }, 'length')]),
+      }),
+    ).rejects.toMatchObject({ code: 'MODEL_PROTOCOL_INVALID' });
     await tracing.flush();
 
     expect(allSpans().slice(malformedStart)).toHaveLength(2);
@@ -425,21 +648,34 @@ describe('actual Langfuse OTLP export', () => {
     const stalled: typeof fetch = async () => {
       let closeTimer: ReturnType<typeof setTimeout>;
 
-      return new Response(new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(chunk({ content: 'partial' }))}\n\n`));
-          closeTimer = setTimeout(() => controller.close(), 100);
-        },
-        cancel() { clearTimeout(closeTimer); },
-      }), { headers: { 'content-type': 'text/event-stream' } });
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify(chunk({ content: 'partial' }))}\n\n`,
+              ),
+            );
+            closeTimer = setTimeout(() => controller.close(), 100);
+          },
+          cancel() {
+            clearTimeout(closeTimer);
+          },
+        }),
+        { headers: { 'content-type': 'text/event-stream' } },
+      );
     };
 
-    await expect(runModelProbe({ ...options, tracing, timeoutMs: 20, fetch: stalled })).rejects.toMatchObject({ code: 'MODEL_TIMEOUT' });
+    await expect(
+      runModelProbe({ ...options, tracing, timeoutMs: 20, fetch: stalled }),
+    ).rejects.toMatchObject({ code: 'MODEL_TIMEOUT' });
     await tracing.flush();
 
     const spans = allSpans().slice(start);
     expect(spans).toHaveLength(2);
-    expect(spans.every((span) => attribute(span, 'langfuse.observation.level') === 'ERROR')).toBe(true);
+    expect(spans.every((span) => attribute(span, 'langfuse.observation.level') === 'ERROR')).toBe(
+      true,
+    );
   });
 
   it('flushes the compiled CLI and still exits when collector data trickles indefinitely', async () => {
@@ -448,38 +684,69 @@ describe('actual Langfuse OTLP export', () => {
       const chunks: Buffer[] = [];
       for await (const part of request) chunks.push(Buffer.from(part));
       const body = JSON.parse(Buffer.concat(chunks).toString()) as { tool_choice?: unknown };
-      const reply = body.tool_choice ? [
-        chunk({ tool_calls: [{ index: 0, id: 'call_echo', type: 'function', function: { name: 'probe_echo', arguments: '{"message":"compatibility check"}' } }] }),
-        chunk({}, 'tool_calls'),
-      ] : [chunk({ content: 'streaming works' }), chunk({}, 'stop')];
+      const reply = body.tool_choice
+        ? [
+            chunk({
+              tool_calls: [
+                {
+                  index: 0,
+                  id: 'call_echo',
+                  type: 'function',
+                  function: { name: 'probe_echo', arguments: '{"message":"compatibility check"}' },
+                },
+              ],
+            }),
+            chunk({}, 'tool_calls'),
+          ]
+        : [chunk({ content: 'streaming works' }), chunk({}, 'stop')];
 
       response.writeHead(200, { 'content-type': 'text/event-stream' });
-      response.end(reply.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n');
+      response.end(
+        reply.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n',
+      );
     });
     modelServer.listen(0, '127.0.0.1');
     await once(modelServer, 'listening');
 
     try {
       const address = modelServer.address();
-      if (!address || typeof address === 'string') throw new Error('Test model address unavailable');
+      if (!address || typeof address === 'string')
+        throw new Error('Test model address unavailable');
       for (const stalled of [false, true]) {
         trickleResponse = stalled;
         const started = Date.now();
         const child = spawn(process.execPath, ['apps/api/dist/commands/cli.js', 'model:probe'], {
-          env: { ...process.env, LLM_BASE_URL: `http://127.0.0.1:${address.port}/v1`, LLM_API_KEY: secret, LLM_MODEL: options.model,
-            LANGFUSE_TRACING_ENABLED: 'true', LANGFUSE_BASE_URL: url, LANGFUSE_PUBLIC_KEY: publicKey, LANGFUSE_SECRET_KEY: secretKey,
-            LANGFUSE_TIMEOUT_MS: stalled ? '100' : '1000', LANGFUSE_DEBUG: 'true', OTEL_LOG_LEVEL: 'debug' },
+          env: {
+            ...process.env,
+            LLM_BASE_URL: `http://127.0.0.1:${address.port}/v1`,
+            LLM_API_KEY: secret,
+            LLM_MODEL: options.model,
+            LANGFUSE_TRACING_ENABLED: 'true',
+            LANGFUSE_BASE_URL: url,
+            LANGFUSE_PUBLIC_KEY: publicKey,
+            LANGFUSE_SECRET_KEY: secretKey,
+            LANGFUSE_TIMEOUT_MS: stalled ? '100' : '1000',
+            LANGFUSE_DEBUG: 'true',
+            OTEL_LOG_LEVEL: 'debug',
+          },
         });
         let output = '';
         let timer: ReturnType<typeof setTimeout> | undefined;
-        child.stdout.on('data', (part: Buffer) => { output += part.toString(); });
-        child.stderr.on('data', (part: Buffer) => { output += part.toString(); });
+        child.stdout.on('data', (part: Buffer) => {
+          output += part.toString();
+        });
+        child.stderr.on('data', (part: Buffer) => {
+          output += part.toString();
+        });
 
         try {
           const [exit] = await Promise.race([
             once(child, 'close'),
             new Promise<never>((_resolve, reject) => {
-              timer = setTimeout(() => reject(new Error('Compiled CLI did not exit after bounded shutdown')), 3000);
+              timer = setTimeout(
+                () => reject(new Error('Compiled CLI did not exit after bounded shutdown')),
+                3000,
+              );
             }),
           ]);
 
@@ -506,7 +773,9 @@ describe('actual Langfuse OTLP export', () => {
   it('does not fail the model workflow when Langfuse rejects exports', async () => {
     responseStatus = 401;
 
-    await expect(runModelProbe({ ...options, tracing, fetch: scriptedFetch() })).resolves.toMatchObject({ compatible: true });
+    await expect(
+      runModelProbe({ ...options, tracing, fetch: scriptedFetch() }),
+    ).resolves.toMatchObject({ compatible: true });
     const start = Date.now();
     await tracing.shutdown();
 
