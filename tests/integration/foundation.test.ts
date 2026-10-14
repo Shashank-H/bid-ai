@@ -5,13 +5,23 @@ import { createDatabaseClient, type DatabaseSettings } from '../../apps/api/src/
 import { initializeDatabase } from '../../apps/api/src/db/initialize.js';
 import { databaseReady } from '../../apps/api/src/db/readiness.js';
 import { assertResetAllowed, resetDatabase } from '../../apps/api/src/db/reset.js';
-import { provisionalAttributes, provisionalKeySchema, tableDefinitions } from '../../apps/api/src/db/tables.js';
+import {
+  provisionalAttributes,
+  provisionalKeySchema,
+  tableDefinitions,
+} from '../../apps/api/src/db/tables.js';
 
 // AWS is an API dependency, not a fourth workspace or root/browser dependency.
 const require = createRequire(new URL('../../apps/api/package.json', import.meta.url));
 const {
-  CreateTableCommand, DeleteTableCommand, DescribeTableCommand, DescribeTimeToLiveCommand,
-  GetItemCommand, PutItemCommand, ScanCommand, UpdateTimeToLiveCommand,
+  CreateTableCommand,
+  DeleteTableCommand,
+  DescribeTableCommand,
+  DescribeTimeToLiveCommand,
+  GetItemCommand,
+  PutItemCommand,
+  ScanCommand,
+  UpdateTimeToLiveCommand,
 } = require('@aws-sdk/client-dynamodb');
 
 const endpoint = process.env.DYNAMODB_ENDPOINT ?? 'http://dynamodb:8000';
@@ -20,7 +30,9 @@ const ownedPrefixes = new Set<string>();
 
 function settings(prefix: string): DatabaseSettings {
   return {
-    endpoint, tablePrefix: prefix, region: process.env.AWS_REGION ?? 'local',
+    endpoint,
+    tablePrefix: prefix,
+    region: process.env.AWS_REGION ?? 'local',
     accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'local',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'local',
   };
@@ -37,20 +49,30 @@ const client = createDatabaseClient(settings(`bid-test-${suiteId}`));
 const markerKey = { PK: { S: 'FOUNDATION#verification' }, SK: { S: 'RECORD' } };
 
 async function putMarker(tableName: string) {
-  await client.send(new PutItemCommand({ TableName: tableName, Item: {
-    ...markerKey, value: { S: suiteId },
-  }, ConditionExpression: 'attribute_not_exists(PK)' }));
+  await client.send(
+    new PutItemCommand({
+      TableName: tableName,
+      Item: {
+        ...markerKey,
+        value: { S: suiteId },
+      },
+      ConditionExpression: 'attribute_not_exists(PK)',
+    }),
+  );
 }
 
 async function getMarker(tableName: string) {
-  return client.send(new GetItemCommand({ TableName: tableName, Key: markerKey, ConsistentRead: true }));
+  return client.send(
+    new GetItemCommand({ TableName: tableName, Key: markerKey, ConsistentRead: true }),
+  );
 }
 
 afterAll(async () => {
   // Never enumerate/delete foreign resources or use the demo TABLE_PREFIX.
   try {
     for (const prefix of ownedPrefixes) {
-      if (!prefix.startsWith(`bid-test-${suiteId}-`)) throw new Error('Test cleanup ownership invariant failed');
+      if (!prefix.startsWith(`bid-test-${suiteId}-`))
+        throw new Error('Test cleanup ownership invariant failed');
 
       for (const table of tableDefinitions(prefix)) {
         try {
@@ -71,8 +93,15 @@ describe('compiled foundation with real DynamoDB Local', () => {
     const compiledTables = await import('../../apps/api/dist/db/tables.js');
 
     expect(typeof compiledClient.createDatabaseClient).toBe('function');
-    expect(compiledTables.tableDefinitions('bid-test-import').map((table: { name: string }) => table.name))
-      .toEqual(['bid-test-import-identity', 'bid-test-import-publisher-data', 'bid-test-import-workflow']);
+    expect(
+      compiledTables
+        .tableDefinitions('bid-test-import')
+        .map((table: { name: string }) => table.name),
+    ).toEqual([
+      'bid-test-import-identity',
+      'bid-test-import-publisher-data',
+      'bid-test-import-workflow',
+    ]);
   });
 
   it('creates empty resources, configures session TTL, and leaves existing records unchanged on repeat init', async () => {
@@ -89,7 +118,9 @@ describe('compiled foundation with real DynamoDB Local', () => {
       expect(table.Table?.TableStatus).toBe('ACTIVE');
       expect(table.Table?.KeySchema).toEqual(provisionalKeySchema);
 
-      const scan = await client.send(new ScanCommand({ TableName: name, Select: 'COUNT', ConsistentRead: true }));
+      const scan = await client.send(
+        new ScanCommand({ TableName: name, Select: 'COUNT', ConsistentRead: true }),
+      );
 
       expect(scan.Count).toBe(0);
     }
@@ -112,18 +143,30 @@ describe('compiled foundation with real DynamoDB Local', () => {
     const prefix = own('schema');
     const identity = tableDefinitions(prefix)[0]!.name;
 
-    await client.send(new CreateTableCommand({ TableName: identity, BillingMode: 'PAY_PER_REQUEST',
-      KeySchema: [{ AttributeName: 'existingKey', KeyType: 'HASH' }],
-      AttributeDefinitions: [{ AttributeName: 'existingKey', AttributeType: 'S' }],
-    }));
-    await client.send(new PutItemCommand({ TableName: identity, Item: { existingKey: { S: suiteId } } }));
+    await client.send(
+      new CreateTableCommand({
+        TableName: identity,
+        BillingMode: 'PAY_PER_REQUEST',
+        KeySchema: [{ AttributeName: 'existingKey', KeyType: 'HASH' }],
+        AttributeDefinitions: [{ AttributeName: 'existingKey', AttributeType: 'S' }],
+      }),
+    );
+    await client.send(
+      new PutItemCommand({ TableName: identity, Item: { existingKey: { S: suiteId } } }),
+    );
 
     await expect(initializeDatabase(client, prefix)).rejects.toThrow('INCOMPATIBLE_SCHEMA');
 
     const table = await client.send(new DescribeTableCommand({ TableName: identity }));
     expect(table.Table?.KeySchema).toEqual([{ AttributeName: 'existingKey', KeyType: 'HASH' }]);
 
-    const row = await client.send(new GetItemCommand({ TableName: identity, Key: { existingKey: { S: suiteId } }, ConsistentRead: true }));
+    const row = await client.send(
+      new GetItemCommand({
+        TableName: identity,
+        Key: { existingKey: { S: suiteId } },
+        ConsistentRead: true,
+      }),
+    );
 
     expect(row.Item).toEqual({ existingKey: { S: suiteId } });
   });
@@ -132,12 +175,20 @@ describe('compiled foundation with real DynamoDB Local', () => {
     const prefix = own('ttl');
     const identity = tableDefinitions(prefix)[0]!.name;
 
-    await client.send(new CreateTableCommand({ TableName: identity, BillingMode: 'PAY_PER_REQUEST',
-      KeySchema: provisionalKeySchema, AttributeDefinitions: provisionalAttributes,
-    }));
-    await client.send(new UpdateTimeToLiveCommand({ TableName: identity,
-      TimeToLiveSpecification: { AttributeName: 'foreignExpiry', Enabled: true },
-    }));
+    await client.send(
+      new CreateTableCommand({
+        TableName: identity,
+        BillingMode: 'PAY_PER_REQUEST',
+        KeySchema: provisionalKeySchema,
+        AttributeDefinitions: provisionalAttributes,
+      }),
+    );
+    await client.send(
+      new UpdateTimeToLiveCommand({
+        TableName: identity,
+        TimeToLiveSpecification: { AttributeName: 'foreignExpiry', Enabled: true },
+      }),
+    );
 
     await expect(initializeDatabase(client, prefix)).rejects.toThrow('INCOMPATIBLE_TTL');
 
@@ -157,7 +208,10 @@ describe('compiled foundation with real DynamoDB Local', () => {
   });
 
   it('bounds unavailable-database readiness instead of hanging or leaking errors', async () => {
-    const unreachable = createDatabaseClient({ ...settings(own('unavailable')), endpoint: 'http://127.0.0.1:1' });
+    const unreachable = createDatabaseClient({
+      ...settings(own('unavailable')),
+      endpoint: 'http://127.0.0.1:1',
+    });
     const started = performance.now();
 
     try {
@@ -178,9 +232,19 @@ describe('compiled foundation with real DynamoDB Local', () => {
 
     await putMarker(table);
 
-    expect(() => assertResetAllowed(configured, { endpoint, prefix, confirmation: '' })).toThrow('RESET_REFUSED');
-    expect(() => assertResetAllowed(configured, { endpoint, prefix: 'bid', confirmation: 'DELETE bid' })).toThrow('RESET_REFUSED');
-    expect(() => assertResetAllowed(configured, { endpoint: 'https://dynamodb.us-east-1.amazonaws.com', prefix, confirmation: `DELETE ${prefix}` })).toThrow();
+    expect(() => assertResetAllowed(configured, { endpoint, prefix, confirmation: '' })).toThrow(
+      'RESET_REFUSED',
+    );
+    expect(() =>
+      assertResetAllowed(configured, { endpoint, prefix: 'bid', confirmation: 'DELETE bid' }),
+    ).toThrow('RESET_REFUSED');
+    expect(() =>
+      assertResetAllowed(configured, {
+        endpoint: 'https://dynamodb.us-east-1.amazonaws.com',
+        prefix,
+        confirmation: `DELETE ${prefix}`,
+      }),
+    ).toThrow();
     expect((await getMarker(table)).Item?.value).toEqual({ S: suiteId });
   });
 
@@ -197,7 +261,11 @@ describe('compiled foundation with real DynamoDB Local', () => {
     await putMarker(ownTable);
     await putMarker(neighborTable);
 
-    await resetDatabase(client, settings(prefix), { endpoint, prefix, confirmation: `DELETE ${prefix}` });
+    await resetDatabase(client, settings(prefix), {
+      endpoint,
+      prefix,
+      confirmation: `DELETE ${prefix}`,
+    });
 
     expect(await databaseReady(client, prefix)).toBe(true);
     expect((await getMarker(ownTable)).Item).toBeUndefined();

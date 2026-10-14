@@ -15,7 +15,11 @@ it('prints command help without needing configuration and rejects unknown comman
 });
 
 it('future commands fail visibly with the correct owning phase and never write data', async () => {
-  for (const [command, phase] of [['data:seed', 2], ['data:reconcile', 2], ['data:generate', 3]] as const) {
+  for (const [command, phase] of [
+    ['data:seed', 2],
+    ['data:reconcile', 2],
+    ['data:generate', 3],
+  ] as const) {
     const result = await call([command]);
 
     expect(result.code).toBe(1);
@@ -28,9 +32,14 @@ it('future commands fail visibly with the correct owning phase and never write d
 
 it('rejects destructive or invalid configuration before any database request', async () => {
   expect((await call(['db:reset'])).text).toContain('RESET_REFUSED');
-  expect((await call(['db:init'], { REPOSITORY_MODE: 'invalid-secret-sentinel' })).text).toContain('INVALID_CONFIGURATION');
+  expect((await call(['db:init'], { REPOSITORY_MODE: 'invalid-secret-sentinel' })).text).toContain(
+    'INVALID_CONFIGURATION',
+  );
 
-  const result = await call(['db:init'], { DYNAMODB_ENDPOINT: 'http://secret-sentinel@remote.example', LLM_API_KEY: 'private-key-sentinel' });
+  const result = await call(['db:init'], {
+    DYNAMODB_ENDPOINT: 'http://secret-sentinel@remote.example',
+    LLM_API_KEY: 'private-key-sentinel',
+  });
 
   expect(result.code).toBe(1);
   expect(result.text).not.toContain('sentinel');

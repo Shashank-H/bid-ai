@@ -48,8 +48,11 @@ export class VisibleText {
 
   finish(): string {
     const partial = this.buffer.replace(/^<\s*\/?\s*/, '').toLowerCase();
-    const incompleteHidden = this.buffer.startsWith('<') && ['think', 'thinking', 'analysis', 'reasoning']
-      .some((tag) => tag.startsWith(partial) || partial.startsWith(tag));
+    const incompleteHidden =
+      this.buffer.startsWith('<') &&
+      ['think', 'thinking', 'analysis', 'reasoning'].some(
+        (tag) => tag.startsWith(partial) || partial.startsWith(tag),
+      );
     const visible = this.hidden.length || incompleteHidden ? '' : this.buffer;
     this.buffer = '';
 

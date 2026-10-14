@@ -31,6 +31,7 @@ An operator increases the floor CPM from $0.80 to $1.40.
 This reduces the number of eligible bids and lowers the fill rate. Although average winning CPM may increase slightly, the reduction in filled impressions causes estimated revenue to decline by approximately 18%.
 
 **Expected agent behavior:**
+
 1. Retrieve weekly revenue trends and identify the decline.
 2. Compare fill rates, CPM, and auction volume before and after the decline.
 3. Retrieve configuration history.
@@ -46,17 +47,20 @@ Publisher B should have different configurations and performance characteristics
 Include scenarios such as:
 
 **Scenario 1: Bidder latency degradation**
+
 - One bidder's response latency increases significantly.
 - More responses arrive after the auction timeout.
 - Bidder participation and estimated revenue decline.
 - Agent identifies the affected bidder and recommends evaluating timeout adjustments or bidder performance.
 
 **Scenario 2: Revenue growth despite lower traffic**
+
 - Traffic decreases, but average winning CPM and fill rate improve.
 - Estimated revenue remains stable or increases.
 - Agent explains why revenue does not always move proportionally with traffic.
 
 **Scenario 3: Underperforming bidder**
+
 - One bidder consistently has low response rates and poor win rates.
 - Agent compares bidders and recommends investigating or disabling the underperforming bidder.
 

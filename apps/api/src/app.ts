@@ -15,9 +15,15 @@ export interface ProductDependencies {
   agent?: AgentService;
 }
 
-export function buildApp(dependencies: HealthDependencies, logging = false, product?: ProductDependencies) {
+export function buildApp(
+  dependencies: HealthDependencies,
+  logging = false,
+  product?: ProductDependencies,
+) {
   const app = Fastify({
-    logger: logging ? { redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] } : false,
+    logger: logging
+      ? { redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]'] }
+      : false,
     disableRequestLogging: true,
     requestTimeout: 10_000,
     bodyLimit: 65_536,
@@ -29,8 +35,10 @@ export function buildApp(dependencies: HealthDependencies, logging = false, prod
       reply.header('Cache-Control', 'no-store');
 
       if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-        if (request.headers.origin !== product.authorization.settings().origin
-          || request.headers['sec-fetch-site'] === 'cross-site') {
+        if (
+          request.headers.origin !== product.authorization.settings().origin ||
+          request.headers['sec-fetch-site'] === 'cross-site'
+        ) {
           throw new HttpError(403, 'UNAUTHORIZED', 'A same-origin request is required.');
         }
 
@@ -46,20 +54,39 @@ export function buildApp(dependencies: HealthDependencies, logging = false, prod
 
   app.setErrorHandler((error, request, reply) => {
     if (!(error instanceof HttpError) || error.status >= 500) {
-      request.log.error({ event: 'http_request_failed', requestId: request.id, method: request.method,
-        path: request.url.split('?')[0], error: errorDiagnostics(error,
-          [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? '']) }, 'Request failed');
+      request.log.error(
+        {
+          event: 'http_request_failed',
+          requestId: request.id,
+          method: request.method,
+          path: request.url.split('?')[0],
+          error: errorDiagnostics(error, [
+            process.env['LLM_API_KEY'] ?? '',
+            process.env['LANGFUSE_SECRET_KEY'] ?? '',
+          ]),
+        },
+        'Request failed',
+      );
     }
 
     if (error instanceof HttpError) {
       void reply.code(error.status).send({ code: error.code, message: error.message });
     } else if (error instanceof ConfigurationError) {
-      void reply.code(503).send({ code: 'DEPENDENCY_UNAVAILABLE', message: 'Server settings are not configured.' });
-    } else if (error instanceof Error && 'statusCode' in error
-      && (error.statusCode === 400 || error.statusCode === 413 || error.statusCode === 415)) {
-      void reply.code(error.statusCode).send({ code: 'INVALID_INPUT', message: 'The request is invalid or too large.' });
+      void reply
+        .code(503)
+        .send({ code: 'DEPENDENCY_UNAVAILABLE', message: 'Server settings are not configured.' });
+    } else if (
+      error instanceof Error &&
+      'statusCode' in error &&
+      (error.statusCode === 400 || error.statusCode === 413 || error.statusCode === 415)
+    ) {
+      void reply
+        .code(error.statusCode)
+        .send({ code: 'INVALID_INPUT', message: 'The request is invalid or too large.' });
     } else {
-      void reply.code(500).send({ code: 'INTERNAL_ERROR', message: 'The request could not be completed.' });
+      void reply
+        .code(500)
+        .send({ code: 'INTERNAL_ERROR', message: 'The request could not be completed.' });
     }
   });
 

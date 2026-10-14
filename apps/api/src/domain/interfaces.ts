@@ -1,4 +1,13 @@
-import type { BidderMetrics, Configuration, ConfigurationHistory, DailyMetrics, PeriodInput, PublisherMembership, ToolResult, User } from '@bid/shared';
+import type {
+  BidderMetrics,
+  Configuration,
+  ConfigurationHistory,
+  DailyMetrics,
+  PeriodInput,
+  PublisherMembership,
+  ToolResult,
+  User,
+} from '@bid/shared';
 
 // Only the future server authorization resolver may establish this opaque brand.
 // There is intentionally no JSON parser or public constructor for trusted context.
@@ -30,12 +39,20 @@ export interface ConfigurationRepository {
   current(context: ExecutionContext): Promise<Configuration | null>;
   history(context: ExecutionContext, period: PeriodInput): Promise<readonly ConfigurationHistory[]>;
   // Implemented in Phase 2: conditionally save current + immutable history atomically.
-  save(context: ExecutionContext, expectedVersion: number, next: Configuration, history: ConfigurationHistory): Promise<void>;
+  save(
+    context: ExecutionContext,
+    expectedVersion: number,
+    next: Configuration,
+    history: ConfigurationHistory,
+  ): Promise<void>;
 }
 
 export interface AnalyticsService {
   performanceSummary(context: ExecutionContext, period: PeriodInput): Promise<ToolResult>;
-  comparePeriods(context: ExecutionContext, periods: { current: PeriodInput; previous: PeriodInput }): Promise<ToolResult>;
+  comparePeriods(
+    context: ExecutionContext,
+    periods: { current: PeriodInput; previous: PeriodInput },
+  ): Promise<ToolResult>;
   bidderPerformance(context: ExecutionContext, period: PeriodInput): Promise<ToolResult>;
 }
 

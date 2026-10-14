@@ -14,14 +14,29 @@ export interface SavedToolExecution extends ToolCall {
 }
 
 export const AgentState = Annotation.Root({
-  turnId: Annotation<string>(), messages: Annotation<ChatCompletionMessageParam[]>(),
-  pending: Annotation<ToolCall[]>(), executions: Annotation<SavedToolExecution[]>(),
-  evidence: Annotation<EvidenceReference[]>(), rounds: Annotation<number>(), toolCount: Annotation<number>(),
-  answer: Annotation<string>(), done: Annotation<boolean>(),
+  turnId: Annotation<string>(),
+  messages: Annotation<ChatCompletionMessageParam[]>(),
+  pending: Annotation<ToolCall[]>(),
+  executions: Annotation<SavedToolExecution[]>(),
+  evidence: Annotation<EvidenceReference[]>(),
+  rounds: Annotation<number>(),
+  toolCount: Annotation<number>(),
+  answer: Annotation<string>(),
+  done: Annotation<boolean>(),
 });
 
 export type State = typeof AgentState.State;
 
 export function initialState(turnId: string, messages: ChatCompletionMessageParam[]): State {
-  return { turnId, messages, pending: [], executions: [], evidence: [], rounds: 0, toolCount: 0, answer: '', done: false };
+  return {
+    turnId,
+    messages,
+    pending: [],
+    executions: [],
+    evidence: [],
+    rounds: 0,
+    toolCount: 0,
+    answer: '',
+    done: false,
+  };
 }

@@ -7,8 +7,13 @@ const metadata = { publisherId: 'publisher-a', name: 'Publisher A', currency: 'U
 
 function repository(item?: Record<string, unknown>) {
   const send = vi.fn().mockResolvedValueOnce({ Item: item }).mockResolvedValue({});
-  vi.spyOn(DynamoDBDocumentClient, 'from').mockReturnValue({ send } as unknown as DynamoDBDocumentClient);
-  const client = new DynamoDBClient({ region: 'local', credentials: { accessKeyId: 'local', secretAccessKey: 'local' } });
+  vi.spyOn(DynamoDBDocumentClient, 'from').mockReturnValue({
+    send,
+  } as unknown as DynamoDBDocumentClient);
+  const client = new DynamoDBClient({
+    region: 'local',
+    credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
+  });
 
   return { repository: new IdentityRepository(client, 'bid-test'), send };
 }
@@ -22,7 +27,11 @@ describe('publisher metadata', () => {
 
     const command = send.mock.calls[1]?.[0];
     expect(command).toBeInstanceOf(PutCommand);
-    expect(command.input.Item).toEqual({ PK: 'PUBLISHER#publisher-a', SK: 'METADATA', data: metadata });
+    expect(command.input.Item).toEqual({
+      PK: 'PUBLISHER#publisher-a',
+      SK: 'METADATA',
+      data: metadata,
+    });
   });
 
   it('removes legacy flags without replacing publisher data and guards concurrent changes', async () => {
@@ -47,7 +56,9 @@ describe('publisher metadata', () => {
   });
 
   it('still refuses to overwrite unrelated publisher changes', async () => {
-    const { repository: identity, send } = repository({ data: { ...metadata, name: 'Changed', demoData: true } });
+    const { repository: identity, send } = repository({
+      data: { ...metadata, name: 'Changed', demoData: true },
+    });
     await expect(identity.ensureDemoPublisher('a')).rejects.toThrow('BOOTSTRAP_CONFLICT');
 
     expect(send).toHaveBeenCalledTimes(1);
@@ -55,10 +66,14 @@ describe('publisher metadata', () => {
 
   it('propagates a failed conditional update instead of retrying an overwrite', async () => {
     const { repository: identity, send } = repository({ data: { ...metadata, demoData: true } });
-    send.mockReset().mockResolvedValueOnce({ Item: { data: { ...metadata, demoData: true } } })
+    send
+      .mockReset()
+      .mockResolvedValueOnce({ Item: { data: { ...metadata, demoData: true } } })
       .mockRejectedValueOnce(new Error('ConditionalCheckFailedException'));
 
-    await expect(identity.ensureDemoPublisher('a')).rejects.toThrow('ConditionalCheckFailedException');
+    await expect(identity.ensureDemoPublisher('a')).rejects.toThrow(
+      'ConditionalCheckFailedException',
+    );
     expect(send).toHaveBeenCalledTimes(2);
   });
 });

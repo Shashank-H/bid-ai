@@ -2,8 +2,8 @@
 
 **Demo-only credentials — intentionally stored in this repository at the user's request. Never reuse these passwords elsewhere.**
 
-| Login | Password | Publisher | Fixture dates (UTC) |
-| --- | --- | --- | --- |
+| Login  | Password                   | Publisher                 | Fixture dates (UTC)   |
+| ------ | -------------------------- | ------------------------- | --------------------- |
 | demo.a | `am4XhTMx-ZJSRCLzZezATi61` | publisher-a (Publisher A) | 2026-01-01–2026-01-14 |
 | demo.b | `4iBX7EwJUCBK9rkJusc6_tgk` | publisher-b (Publisher B) | 2026-02-01–2026-02-14 |
 

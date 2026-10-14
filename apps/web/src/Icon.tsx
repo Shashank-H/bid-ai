@@ -23,8 +23,20 @@ const paths = {
 export type IconName = keyof typeof paths;
 
 export function Icon({ name, style }: { name: IconName; style?: CSSProperties }) {
-  return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"
-    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={style}>
-    <path d={paths[name]} />
-  </svg>;
+  return (
+    <svg
+      className="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      style={style}
+    >
+      <path d={paths[name]} />
+    </svg>
+  );
 }

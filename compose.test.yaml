@@ -7,7 +7,7 @@ services:
     build:
       target: test
     working_dir: /workspace
-    command: ["pnpm", "test"]
+    command: ['pnpm', 'test']
     healthcheck:
       disable: true
   web:
@@ -15,7 +15,7 @@ services:
     build:
       target: test
     working_dir: /workspace
-    command: ["pnpm", "test:e2e"]
+    command: ['pnpm', 'test:e2e']
     environment:
       WEB_BASE_URL: http://web
     healthcheck:

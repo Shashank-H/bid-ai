@@ -12,7 +12,10 @@ export interface AuthorizedRequest {
 }
 
 export class Authorization {
-  constructor(readonly users: UserRepository, readonly settings: () => AuthSettings) {}
+  constructor(
+    readonly users: UserRepository,
+    readonly settings: () => AuthSettings,
+  ) {}
 
   async resolve(request: Pick<FastifyRequest, 'headers'>): Promise<AuthorizedRequest> {
     const settings = this.settings();

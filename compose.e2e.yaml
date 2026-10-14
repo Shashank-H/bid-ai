@@ -3,7 +3,7 @@ services:
   agent-test-api:
     image: bid-intelligence-api-test:phase1
     working_dir: /workspace
-    command: ["node", "tests/support/e2e-server.ts"]
+    command: ['node', 'tests/support/e2e-server.ts']
     environment:
       DYNAMODB_ENDPOINT: http://dynamodb:8000
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
@@ -14,7 +14,13 @@ services:
       dynamodb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
       interval: 2s
       timeout: 4s
       retries: 30
@@ -32,7 +38,7 @@ services:
       agent-test-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
+      test: ['CMD', 'wget', '--quiet', '--spider', 'http://127.0.0.1/health']
       interval: 2s
       timeout: 4s
       retries: 10
@@ -40,4 +46,4 @@ services:
   web:
     environment:
       WEB_BASE_URL: http://agent-test-web
-      AGENT_E2E: "true"
+      AGENT_E2E: 'true'

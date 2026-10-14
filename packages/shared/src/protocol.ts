@@ -18,57 +18,114 @@ export const FindingSchema = z.strictObject({
 });
 
 export const SafeErrorSchema = z.strictObject({
-  code: z.enum(['UNAUTHORIZED', 'INVALID_INPUT', 'NOT_IMPLEMENTED', 'DEPENDENCY_UNAVAILABLE', 'TOOL_FAILED', 'MODEL_INCOMPATIBLE', 'BUDGET_EXCEEDED', 'TIMEOUT', 'CANCELLED', 'INTERNAL_ERROR', 'NOT_FOUND', 'CONFLICT', 'RATE_LIMITED', 'EVIDENCE_INVALID']),
+  code: z.enum([
+    'UNAUTHORIZED',
+    'INVALID_INPUT',
+    'NOT_IMPLEMENTED',
+    'DEPENDENCY_UNAVAILABLE',
+    'TOOL_FAILED',
+    'MODEL_INCOMPATIBLE',
+    'BUDGET_EXCEEDED',
+    'TIMEOUT',
+    'CANCELLED',
+    'INTERNAL_ERROR',
+    'NOT_FOUND',
+    'CONFLICT',
+    'RATE_LIMITED',
+    'EVIDENCE_INVALID',
+  ]),
   message: z.string().min(1).max(500),
 });
 
-export const ToolResultSchema = z.strictObject({
-  // Bounded serialized results; additional model/provider fields are not accepted here.
-  summary: z.string().max(4000),
-  data: ToolDataSchema.optional(),
-  evidence: z.array(EvidenceReferenceSchema).max(100),
-  findings: z.array(FindingSchema).max(50),
-}).refine(({ evidence, findings }) => {
-  const ids = new Set(evidence.map((entry) => entry.evidenceId));
+export const ToolResultSchema = z
+  .strictObject({
+    // Bounded serialized results; additional model/provider fields are not accepted here.
+    summary: z.string().max(4000),
+    data: ToolDataSchema.optional(),
+    evidence: z.array(EvidenceReferenceSchema).max(100),
+    findings: z.array(FindingSchema).max(50),
+  })
+  .refine(
+    ({ evidence, findings }) => {
+      const ids = new Set(evidence.map((entry) => entry.evidenceId));
 
-  return ids.size === evidence.length && findings.every((finding) => finding.evidenceIds.every((id) => ids.has(id)));
-}, { message: 'Findings require unique, present evidence references' });
+      return (
+        ids.size === evidence.length &&
+        findings.every((finding) => finding.evidenceIds.every((id) => ids.has(id)))
+      );
+    },
+    { message: 'Findings require unique, present evidence references' },
+  );
 
-const StreamFields = { turnId: IdSchema, correlationId: IdSchema, conversationId: IdSchema.optional() };
+const StreamFields = {
+  turnId: IdSchema,
+  correlationId: IdSchema,
+  conversationId: IdSchema.optional(),
+};
 
 export const StreamEventSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...StreamFields, type: z.literal('turn-start') }),
   z.strictObject({ ...StreamFields, type: z.literal('text-reset') }),
   z.strictObject({ ...StreamFields, type: z.literal('text-delta'), text: z.string().max(16_384) }),
-  z.strictObject({ ...StreamFields, type: z.literal('tool-start'), toolCallId: IdSchema, toolName: IdSchema, argumentsJson: z.string().max(16_384).optional() }),
-  z.strictObject({ ...StreamFields, type: z.literal('tool-result'), toolCallId: IdSchema, result: ToolResultSchema }),
-  z.strictObject({ ...StreamFields, type: z.literal('tool-error'), toolCallId: IdSchema, error: SafeErrorSchema }),
-  z.strictObject({ ...StreamFields, type: z.literal('turn-complete'), evidence: z.array(EvidenceReferenceSchema).max(100).optional() }),
+  z.strictObject({
+    ...StreamFields,
+    type: z.literal('tool-start'),
+    toolCallId: IdSchema,
+    toolName: IdSchema,
+    argumentsJson: z.string().max(16_384).optional(),
+  }),
+  z.strictObject({
+    ...StreamFields,
+    type: z.literal('tool-result'),
+    toolCallId: IdSchema,
+    result: ToolResultSchema,
+  }),
+  z.strictObject({
+    ...StreamFields,
+    type: z.literal('tool-error'),
+    toolCallId: IdSchema,
+    error: SafeErrorSchema,
+  }),
+  z.strictObject({
+    ...StreamFields,
+    type: z.literal('turn-complete'),
+    evidence: z.array(EvidenceReferenceSchema).max(100).optional(),
+  }),
   z.strictObject({ ...StreamFields, type: z.literal('turn-cancelled') }),
   z.strictObject({ ...StreamFields, type: z.literal('turn-error'), error: SafeErrorSchema }),
 ]);
 
-export const ProposalSchema = z.strictObject({
-  proposalId: IdSchema,
-  publisherId: IdSchema,
-  createdAt: TimestampSchema,
-  proposedByUserId: IdSchema,
-  expectedVersion: z.number().int().positive(),
-  before: ConfigurationSettingsSchema,
-  after: ConfigurationSettingsSchema,
-  rationale: z.string().min(1).max(4000),
-  evidence: z.array(EvidenceReferenceSchema).min(1).max(100),
-  status: z.enum(['pending', 'approved', 'rejected', 'stale', 'applied']),
-}).refine(({ publisherId, evidence }) => evidence.every((entry) => entry.publisherId === publisherId), {
-  message: 'Proposal evidence must belong to its publisher',
-});
+export const ProposalSchema = z
+  .strictObject({
+    proposalId: IdSchema,
+    publisherId: IdSchema,
+    createdAt: TimestampSchema,
+    proposedByUserId: IdSchema,
+    expectedVersion: z.number().int().positive(),
+    before: ConfigurationSettingsSchema,
+    after: ConfigurationSettingsSchema,
+    rationale: z.string().min(1).max(4000),
+    evidence: z.array(EvidenceReferenceSchema).min(1).max(100),
+    status: z.enum(['pending', 'approved', 'rejected', 'stale', 'applied']),
+  })
+  .refine(
+    ({ publisherId, evidence }) => evidence.every((entry) => entry.publisherId === publisherId),
+    {
+      message: 'Proposal evidence must belong to its publisher',
+    },
+  );
 
 export const AuditRecordSchema = z.strictObject({
   auditId: IdSchema,
   publisherId: IdSchema,
   actorUserId: IdSchema,
   timestamp: TimestampSchema,
-  action: z.enum(['configuration-saved', 'proposal-approved', 'proposal-rejected', 'proposal-applied']),
+  action: z.enum([
+    'configuration-saved',
+    'proposal-approved',
+    'proposal-rejected',
+    'proposal-applied',
+  ]),
   proposalId: IdSchema.optional(),
   configurationVersion: z.number().int().positive().optional(),
 });

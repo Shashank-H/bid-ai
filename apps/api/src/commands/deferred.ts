@@ -6,7 +6,9 @@ export const deferredCommands = {
 
 export class NotImplementedError extends Error {
   constructor(command: keyof typeof deferredCommands) {
-    super(`NOT_IMPLEMENTED: ${command} belongs to Phase ${deferredCommands[command]}; no data was written`);
+    super(
+      `NOT_IMPLEMENTED: ${command} belongs to Phase ${deferredCommands[command]}; no data was written`,
+    );
 
     this.name = 'NotImplementedError';
   }

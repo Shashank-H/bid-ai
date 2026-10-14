@@ -155,21 +155,21 @@ Keep this document high-level. Resolve algorithms, schemas, exact package versio
 
 These are cross-phase implementation boundaries; individual phase plans refine exact filenames.
 
-| Paths | Responsibility |
-| --- | --- |
-| `docs/architecture-and-implementation/IMPLEMENTATION-ROADMAP.md` | Cross-phase roadmap (this document) |
-| `docs/requirements/Full-Requirements.md` | Canonical requirements (normalized during Phase 0 without changing scope) |
-| `docs/requirements/phase N/PLAN.md` | Detailed plan and all supporting documentation for each phase, including Phase 0 |
-| `README.md`, `docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md` | Concise project overview and shared setup/runbook |
-| `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.env.example`, `.gitignore` | Monorepo and shared tooling/environment |
-| `compose.yaml`, `docker/` | Local services, Dockerfiles, database initialization |
-| `apps/web/` | Login, dashboard, chat, configuration editor, charts, approvals |
-| `apps/api/` | Co-hosted agent, user/authentication and configuration modules; optional future MCP adapter only if requested |
-| `apps/api/src/tools/` | Tool definitions and directly callable execution functions |
-| `apps/api/src/domain/` | Shared analytics/configuration services used by tools and authenticated routes |
-| `packages/shared/`, `apps/api/src/db/` | Shared schemas, metric semantics, user/publisher context, DynamoDB repositories |
-| `apps/api/src/commands/` | Development user-bootstrap, fixture/seed/generator/reconciliation commands |
-| `tests/` | Cross-service and browser tests; hidden scenario manifest in a test-only location |
+| Paths                                                                                     | Responsibility                                                                                                |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `docs/architecture-and-implementation/IMPLEMENTATION-ROADMAP.md`                          | Cross-phase roadmap (this document)                                                                           |
+| `docs/requirements/Full-Requirements.md`                                                  | Canonical requirements (normalized during Phase 0 without changing scope)                                     |
+| `docs/requirements/phase N/PLAN.md`                                                       | Detailed plan and all supporting documentation for each phase, including Phase 0                              |
+| `README.md`, `docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md`                  | Concise project overview and shared setup/runbook                                                             |
+| `package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `.env.example`, `.gitignore` | Monorepo and shared tooling/environment                                                                       |
+| `compose.yaml`, `docker/`                                                                 | Local services, Dockerfiles, database initialization                                                          |
+| `apps/web/`                                                                               | Login, dashboard, chat, configuration editor, charts, approvals                                               |
+| `apps/api/`                                                                               | Co-hosted agent, user/authentication and configuration modules; optional future MCP adapter only if requested |
+| `apps/api/src/tools/`                                                                     | Tool definitions and directly callable execution functions                                                    |
+| `apps/api/src/domain/`                                                                    | Shared analytics/configuration services used by tools and authenticated routes                                |
+| `packages/shared/`, `apps/api/src/db/`                                                    | Shared schemas, metric semantics, user/publisher context, DynamoDB repositories                               |
+| `apps/api/src/commands/`                                                                  | Development user-bootstrap, fixture/seed/generator/reconciliation commands                                    |
+| `tests/`                                                                                  | Cross-service and browser tests; hidden scenario manifest in a test-only location                             |
 
 Exact filenames within these directories will be resolved in individual phase plans. Phase 0 creates the workspace/service shells and command wiring; later phases fill in their behavior.
 
@@ -192,17 +192,17 @@ Exact filenames within these directories will be resolved in individual phase pl
 
 Use each phase's exit gate as its acceptance checklist. Phase-specific plans and the shared local runbook define commands and tests. The Phase 0 verification record distinguishes completed local checks from the pending live-model gate.
 
-| Requirement | Delivery / verification |
-| --- | --- |
-| Working streaming agent with direct tools | Phase 1 browser-to-model-to-function demonstration; mock-model contract tests plus an opt-in real-endpoint smoke test |
-| Local setup once | Phase 0 clean-start, health, persistence, initialization checks; later phases reuse the same Compose services |
-| Persisted synthetic Prebid events | Phase 2 seed validation, repeatable loads, duplicate protection, and aggregate reconciliation |
-| Backend user and configuration modules | Phase 1 authentication/session tests; Phase 2 authorized configuration saves, version checks, and updating-user history assertions |
-| Seeded history and Publisher A/B anomalies | Phase 3 reproducibility and scenario metric assertions |
-| Tenant isolation and manifest secrecy | Phase 1 onwards adversarial tool/API tests; Phase 3 manifest excluded from model-facing runtimes |
-| Charts, metrics, traces and cautious explanations | Phase 4 browser checks and evidence-grounded scenario evaluations |
-| Explicit mutation approval | Phase 5 authorized approval, rejection, replay/staleness, audit/history tests |
-| Repeatable final demo | Phase 6 fresh-start walkthrough and local regression suite |
+| Requirement                                       | Delivery / verification                                                                                                            |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Working streaming agent with direct tools         | Phase 1 browser-to-model-to-function demonstration; mock-model contract tests plus an opt-in real-endpoint smoke test              |
+| Local setup once                                  | Phase 0 clean-start, health, persistence, initialization checks; later phases reuse the same Compose services                      |
+| Persisted synthetic Prebid events                 | Phase 2 seed validation, repeatable loads, duplicate protection, and aggregate reconciliation                                      |
+| Backend user and configuration modules            | Phase 1 authentication/session tests; Phase 2 authorized configuration saves, version checks, and updating-user history assertions |
+| Seeded history and Publisher A/B anomalies        | Phase 3 reproducibility and scenario metric assertions                                                                             |
+| Tenant isolation and manifest secrecy             | Phase 1 onwards adversarial tool/API tests; Phase 3 manifest excluded from model-facing runtimes                                   |
+| Charts, metrics, traces and cautious explanations | Phase 4 browser checks and evidence-grounded scenario evaluations                                                                  |
+| Explicit mutation approval                        | Phase 5 authorized approval, rejection, replay/staleness, audit/history tests                                                      |
+| Repeatable final demo                             | Phase 6 fresh-start walkthrough and local regression suite                                                                         |
 
 ## Out of scope
 
