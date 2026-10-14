@@ -22,11 +22,17 @@
     "data:seed": "pnpm --filter @bid/api data:seed",
     "data:generate": "pnpm --filter @bid/api data:generate",
     "data:reconcile": "pnpm --filter @bid/api data:reconcile",
-    "postgres:init": "pnpm --filter @bid/api postgres:init"
+    "postgres:init": "pnpm --filter @bid/api postgres:init",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{css,graphql,gql,html,js,jsx,json,jsonc,md,mdx,scss,ts,tsx,yaml,yml}": "prettier --write"
   },
   "devDependencies": {
     "@playwright/test": "1.64.0",
     "@types/node": "24.19.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
     "prettier": "^3.9.10",
     "typescript": "5.9.3",
     "vitest": "5.0.4"
