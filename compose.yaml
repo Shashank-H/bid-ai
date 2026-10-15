@@ -53,6 +53,23 @@ services:
         condition: service_healthy
     restart: 'no'
 
+  # Explicit one-time operator command; never participates in normal startup.
+  data-generator:
+    profiles: ['data']
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: data-generator
+    environment:
+      <<: *database-environment
+      PHASE3_OUTPUT_DIR: /output
+    volumes:
+      - phase3-output:/output
+    depends_on:
+      dynamodb:
+        condition: service_healthy
+    restart: 'no'
+
   api:
     build:
       context: .
@@ -128,3 +145,5 @@ services:
 volumes:
   postgres-data:
   dynamodb-data:
+  # Private command output, not mounted into API/web.
+  phase3-output:

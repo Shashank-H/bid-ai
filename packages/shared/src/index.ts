@@ -2,7 +2,10 @@
 export * from './common.js';
 export * from './identity.js';
 export * from './auction.js';
+export * from './auction-record.js';
 export * from './configuration.js';
+export * from './prebid.js';
+export * from './dataset.js';
 export * from './protocol.js';
 
 export * from './analytics.js';

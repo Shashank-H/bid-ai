@@ -44,22 +44,22 @@ Do not remove volumes as part of ordinary startup or shutdown. After source chan
 
 `.env` is ignored by Git and excluded from Docker build contexts. Do not put secrets in `VITE_*` variables, browser source, build arguments or documentation. `docker compose config` without `--quiet` prints interpolated values, including secrets: do not publish that output.
 
-| Setting                                                    | Default / behavior                                                                                                             |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `WEB_PORT`, `API_PORT`                                     | 8080 / 3000, host bindings restricted to `127.0.0.1`; API internally listens on 3000                                           |
-| `DYNAMODB_ENDPOINT`                                        | `http://dynamodb:8000`; local HTTP loopback/Compose endpoints only; cloud/remote database URLs rejected                        |
-| `TABLE_PREFIX`                                             | `bid`; allowed format `bid` followed by optional lowercase alphanumeric hyphen-separated segments                              |
-| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `local`; dummy local-only values, never real AWS credentials                                                                   |
-| `REPOSITORY_MODE`                                          | `fixture` provides tiny demo analytics; database-backed analytics remain deferred                                              |
-| `SESSION_COOKIE_NAME`                                      | `bid_session`; identifier-style cookie name                                                                                    |
-| `SESSION_LIFETIME_SECONDS`                                 | 28800; validated range 60–604800                                                                                               |
-| `SESSION_COOKIE_SECURE`                                    | `false`; accepts only `true`/`false`; signed HttpOnly SameSite=Strict cookie; Secure=true requires HTTPS                       |
-| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`                 | `http://host.docker.internal:11434/v1`, `ollama` (non-secret placeholder), `qwen3.5:9b`; explicit nonblank overrides supported |
-| `LLM_TIMEOUT_MS`                                           | 110000; model/probe accepts 1000–120000; product also enforces the turn deadline                                               |
-| `LLM_REASONING_EFFORT`, `LLM_TEMPERATURE`                  | Standard request options, default `none` / `0`, independently configurable for other models                                    |
-| `AUTH_SIGNING_SECRET`, `DEMO_PASSWORD_A/B`                 | Public local-demo defaults matching DEMO-ACCOUNTS.md; replace for shared deployment                                            |
+| Setting                                                    | Default / behavior                                                                                                               |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `WEB_PORT`, `API_PORT`                                     | 8080 / 3000, host bindings restricted to `127.0.0.1`; API internally listens on 3000                                             |
+| `DYNAMODB_ENDPOINT`                                        | `http://dynamodb:8000`; local HTTP loopback/Compose endpoints only; cloud/remote database URLs rejected                          |
+| `TABLE_PREFIX`                                             | `bid`; allowed format `bid` followed by optional lowercase alphanumeric hyphen-separated segments                                |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | `local`; dummy local-only values, never real AWS credentials                                                                     |
+| `REPOSITORY_MODE`                                          | `fixture` provides tiny demo analytics; `database` reads ready publisher-scoped DynamoDB datasets; use the seeded `TABLE_PREFIX` |
+| `SESSION_COOKIE_NAME`                                      | `bid_session`; identifier-style cookie name                                                                                      |
+| `SESSION_LIFETIME_SECONDS`                                 | 28800; validated range 60–604800                                                                                                 |
+| `SESSION_COOKIE_SECURE`                                    | `false`; accepts only `true`/`false`; signed HttpOnly SameSite=Strict cookie; Secure=true requires HTTPS                         |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`                 | `http://host.docker.internal:11434/v1`, `ollama` (non-secret placeholder), `qwen3.5:9b`; explicit nonblank overrides supported   |
+| `LLM_TIMEOUT_MS`                                           | 110000; model/probe accepts 1000–120000; product also enforces the turn deadline                                                 |
+| `LLM_REASONING_EFFORT`, `LLM_TEMPERATURE`                  | Standard request options, default `none` / `0`, independently configurable for other models                                      |
+| `AUTH_SIGNING_SECRET`, `DEMO_PASSWORD_A/B`                 | Public local-demo defaults matching DEMO-ACCOUNTS.md; replace for shared deployment                                              |
 
-Three empty tables are provisioned: `<prefix>-identity`, `<prefix>-publisher-data`, `<prefix>-workflow`. Their `PK`/`SK` keys are **provisional foundation placeholders**, not committed future access-pattern design. The foundation identity TTL remains provisioned but is unused by authentication: **no sessions/token hashes are stored**. Init refuses incompatible existing keys/TTL and never silently deletes data to repair them.
+Initialization provisions `<prefix>-identity`, `<prefix>-publisher-data`, and `<prefix>-workflow` without clearing existing data. Phase 3 reuses the publisher-data table for scoped configuration/history, dataset descriptors, auction records and derived metrics; no new table or index is required. `TABLE_PREFIX` selects the identity/workflow tables as well as analytics. The foundation identity TTL remains provisioned but is unused by authentication: **no sessions/token hashes are stored**. Init refuses incompatible existing keys/TTL and never silently deletes data to repair them.
 
 ## Run checks in existing containers
 
@@ -148,9 +148,13 @@ This checkout runs Docker Desktop: its built-in `host.docker.internal:11434` for
 
 A real `qwen3.5:9b` check returned OK through both native and OpenAI-compatible APIs. Cold loading took ~67 seconds; warm inference took ~1 second. Product requests use `max_tokens` and standard configurable `LLM_REASONING_EFFORT=none` / `LLM_TEMPERATURE=0` defaults. The adapter contains no model-name checks or provider-specific tool parser. The earlier missing-key smoke limitation is superseded: local Ollama requires no secret API key. The real app comparison completed with citations and saved reload in 31 seconds; see [phase verification](../requirements/phase%201/VERIFICATION.md) for results and model-quality limitations.
 
-## Future command shells
+## Explicit data commands
 
-`users:bootstrap` explicitly creates repeat-safe Argon2id development users, publisher metadata and memberships; existing conflicting records are never replaced. `postgres:init` applies Drizzle application migrations and official saver migrations in separate schemas. `data:seed`, `data:reconcile`, and `data:generate` remain deferred and fail with `NOT_IMPLEMENTED`. No accounts or historical dataset are created automatically.
+`users:bootstrap` creates repeat-safe Argon2id development users, publisher metadata and memberships; conflicting records are never replaced. `postgres:init` applies Drizzle application migrations and official saver migrations in separate schemas. No accounts or historical dataset are created automatically.
+
+`data:reconcile` is implemented in the API command image. Historical `data:generate` and offline `data:verify` run only in the dedicated `data-generator` service under the Compose `data` profile. Follow the [Phase 3 runbook](../requirements/phase%203/RUNBOOK.md) rather than rerunning a seed or resetting tables.
+
+The auction layout stores one uncompressed item per auction with detailed bidder observations. The one-time `bid-publisher-data` (`TABLE_PREFIX=bid`) load completed with exit 0 and `seed-ready` on October 15, 2026, in 59 minutes 39.6 seconds. Both datasets are ready: 110,288 auction items preserve 1,925,599 logical observations and the original hashes. Fixture and read-only persisted browser suites passed. See the [verification record](../requirements/phase%203/DATA-VERIFICATION.md) for independent reconciliation and integration results. To select this data, set `REPOSITORY_MODE=database` with `TABLE_PREFIX=bid`, rebuild API/web and recreate only those services; verification did not change the main app's fixture-mode settings. The former `bid-test-phase3-20261014193005-b01669` load was intentionally stopped; **retain all of its test tables and partial data**. There is no resume, replacement or automatic cleanup. This phase implements the persistence prerequisite, not a settings editor or agent mutation workflow.
 
 ## Diagnostics
 
@@ -165,7 +169,7 @@ A real `qwen3.5:9b` check returned OK through both native and OpenAI-compatible 
 - The demo has a stable public `AUTH_SIGNING_SECRET` fallback; a configured nonblank secret overrides it. Replace it with a persistent random value of at least 32 bytes before sharing the application. `APP_ORIGIN` must exactly match the browser origin (update it if changing WEB_PORT).
 - Authentication is stateless signed cookies, not DB sessions. Every request rechecks the DynamoDB user's disabled flag and current single-publisher membership. Logout clears the cookie and cancels local active streams; a copied token remains valid until expiry. Rotating the signing secret invalidates all tokens. Local capped login throttling is single-process, not production abuse protection.
 - `POSTGRES_PASSWORD` defaults to a local-development-only value; optional `DATABASE_URL` overrides the internal connection. Application tables live in `public` with Drizzle migration tracking in `drizzle`; official LangGraph saver tables live in `agent_checkpoints`. Neither store contains authentication session records.
-- Fixed fixtures: Publisher A January 1–14, 2026; Publisher B February 1–14, 2026, UTC. Publisher metadata/accounts are persisted by bootstrap, but these aggregate observations remain checked-in fixtures—not a historical DynamoDB data seed.
+- Fixture mode retains Publisher A January 1–14, 2026 and Publisher B February 1–14, 2026, UTC. Database mode uses persisted ready metadata and tools without fixture fallback. The ready Phase 3 dataset spans August 24–October 19, 2026 with exact timestamp bounds and partial boundary dates; the latest complete UTC date is October 18. Fixture and persisted browser checks passed.
 - Open New chat, ask “What changed in my performance?”, inspect tool results/evidence. Earnings are estimated revenue and recommendations cannot mutate configuration. Text is provisional until evidence validation completes.
 - Stop is terminal. Refresh reads persisted state without starting model work. Disconnect/restart interruptions can be explicitly resumed after their lease expires (up to 115 seconds after a crash). Resume reauthorizes ownership, reuses saved tool boundaries and cannot guarantee exactly-once execution of an unfinished read-only node. Cancel an interrupted turn before sending a different question in that conversation.
 - Initial limits: six model attempts, twelve tool attempts, three resumes per turn; 16 KiB arguments, 32 KiB results, 128 KiB model context, 64 KiB visible output, 256 KiB saved state. `AGENT_DEADLINE_MS` defaults to 110000 (maximum), `AGENT_MAX_COMPLETION_TOKENS` to 4096 (maximum 8192), independent of probe budgets. Context retains bounded recent completed turns; older saved messages remain viewable.
@@ -173,7 +177,7 @@ A real `qwen3.5:9b` check returned OK through both native and OpenAI-compatible 
 
 ### Isolated full browser checks
 
-The optional `compose.e2e.yaml` runs a test-only API/web and a fake HTTP model. It uses the **same** local database services with unique `bid-test-e2e-*` DynamoDB tables and a `bid_test_e2e_*` PostgreSQL database. Graceful stop deletes only those owned resources. Integration tests similarly use unique resources and clean them in `afterAll`; never reset demo tables to test.
+The optional `compose.e2e.yaml` runs a test-only API/web and a fake HTTP model. Its default fixture mode uses the **same** local database services with unique `bid-test-e2e-*` DynamoDB tables and a `bid_test_e2e_*` PostgreSQL database. Graceful stop deletes only those owned resources. External persisted-prefix mode must preserve its DynamoDB tables; see [Phase 3 browser verification](../requirements/phase%203/BROWSER-VERIFICATION.md) for explicit read-only target opt-in, credential constraints and successful results. Integration tests similarly use unique resources and clean them in `afterAll`; never reset demo or retained test tables to test.
 
 ```sh
 docker compose -f compose.yaml -f compose.test.yaml -f compose.e2e.yaml build agent-test-web

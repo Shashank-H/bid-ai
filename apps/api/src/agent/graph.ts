@@ -4,7 +4,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { SafeError, StreamEvent } from '@bid/shared';
 import type { ExecutionContext } from '../domain/interfaces.js';
 import { HttpError } from '../errors.js';
-import { dispatchTool } from '../tools/dispatch.js';
+import type { ToolDispatcher } from '../tools/dispatch.js';
 import type { TracingRuntime } from '../observability/tracing.js';
 import { AgentState } from './state.js';
 import type { SavedToolExecution, State, ToolCall } from './state.js';
@@ -17,6 +17,7 @@ export interface ModelStep {
 
 export interface GraphDependencies {
   context: ExecutionContext;
+  dispatchTool: ToolDispatcher;
   tracing: TracingRuntime;
   guard: () => Promise<void>;
   reserve: (kind: 'model' | 'tool') => Promise<void>;
@@ -86,7 +87,7 @@ export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
           await deps.reserve('tool');
           result = await deps.tracing.tool(
             { name: call.name, argumentsJson: call.argumentsJson },
-            () => dispatchTool(call.name, call.argumentsJson, deps.context),
+            () => deps.dispatchTool(call.name, call.argumentsJson, deps.context),
             'investigation-tool',
           );
         }
@@ -109,6 +110,9 @@ export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
           ]),
         ).values(),
       ];
+      if (evidence.length > 100) {
+        throw new HttpError(429, 'BUDGET_EXCEEDED', 'The turn evidence budget was reached.');
+      }
       const execution = { ...call, result, error };
       const content = JSON.stringify(result ?? { error });
 

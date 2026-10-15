@@ -1,7 +1,11 @@
 import { createServer } from 'node:http';
 import type { ServerResponse } from 'node:http';
 
-export async function startModelServer(host = '127.0.0.1', port = 0) {
+export async function startModelServer(
+  host = '127.0.0.1',
+  port = 0,
+  profile: 'fixture' | 'phase3' = 'fixture',
+) {
   let requests = 0;
   const server = createServer(async (request, response) => {
     if (request.url !== '/v1/chat/completions' || request.method !== 'POST') {
@@ -59,22 +63,26 @@ export async function startModelServer(host = '127.0.0.1', port = 0) {
         ? '02'
         : '01';
       const period = { startDate: `2026-${month}-01`, endDate: `2026-${month}-14` };
-      const calls = [
-        { name: 'performance_summary', arguments: JSON.stringify(period) },
-        {
-          name: 'compare_periods',
-          arguments: JSON.stringify({
-            previous: { ...period, endDate: `2026-${month}-07` },
-            current: { ...period, startDate: `2026-${month}-08` },
-          }),
-        },
-        { name: 'configuration_history', arguments: JSON.stringify(period) },
-      ];
+      const calls =
+        profile === 'phase3'
+          ? phase3Calls(question)
+          : [
+              { name: 'performance_summary', arguments: JSON.stringify(period) },
+              {
+                name: 'compare_periods',
+                arguments: JSON.stringify({
+                  previous: { ...period, endDate: `2026-${month}-07` },
+                  current: { ...period, startDate: `2026-${month}-08` },
+                }),
+              },
+              { name: 'configuration_history', arguments: JSON.stringify(period) },
+            ];
       if (question.includes('mock:malformed')) calls[0]!.arguments = '{invalid';
       if (question.includes('mock:unknown')) calls[0]!.name = 'mutate_configuration';
 
       // Multiple indices arrive out of order and arguments span distinct chunks.
-      for (const index of [2, 0, 1]) {
+      const indices = profile === 'phase3' ? calls.map((_, index) => index).reverse() : [2, 0, 1];
+      for (const index of indices) {
         const call = calls[index]!;
         const middle = Math.floor(call.arguments.length / 2);
         chunk({
@@ -96,11 +104,14 @@ export async function startModelServer(host = '127.0.0.1', port = 0) {
       const history = results.find((result) => result.data?.kind === 'configuration-history');
       const firstEvidence = comparison?.evidence[0]?.evidenceId;
       const changeEvidence = history?.evidence.at(-1)?.evidenceId;
-      const final = question.includes('mock:fake-citation')
-        ? 'Observation: revenue fell [invented-evidence].'
-        : firstEvidence
-          ? `Observation: Estimated revenue changed from $${comparison.data.previous.estimatedRevenue.toFixed(2)} to $${comparison.data.current.estimatedRevenue.toFixed(2)} [${firstEvidence}].\n\nHypothesis: The recorded configuration timing may be related; correlation is not proof [${changeEvidence ?? firstEvidence}].\n\nRecommendation: Investigate a controlled comparison before changing settings [${firstEvidence}].`
-          : 'I could not retrieve authorized observations. No analytical finding is available.';
+      const final =
+        profile === 'phase3'
+          ? phase3Answer(results)
+          : question.includes('mock:fake-citation')
+            ? 'Observation: revenue fell [invented-evidence].'
+            : firstEvidence
+              ? `Observation: Estimated revenue changed from $${comparison.data.previous.estimatedRevenue.toFixed(2)} to $${comparison.data.current.estimatedRevenue.toFixed(2)} [${firstEvidence}].\n\nHypothesis: The recorded configuration timing may be related; correlation is not proof [${changeEvidence ?? firstEvidence}].\n\nRecommendation: Investigate a controlled comparison before changing settings [${firstEvidence}].`
+              : 'I could not retrieve authorized observations. No analytical finding is available.';
       chunk({ reasoning_content: 'PRIVATE_SEPARATE_REASONING_SENTINEL', content: '<thi' });
       chunk({ content: 'nk>PRIVATE_INLINE_REASONING_SENTINEL</th' });
       chunk({ content: 'ink>' });
@@ -137,4 +148,79 @@ export async function startModelServer(host = '127.0.0.1', port = 0) {
 
 function write(response: ServerResponse, value: unknown) {
   if (!response.destroyed) response.write(`data: ${JSON.stringify(value)}\n\n`);
+}
+
+function phase3Calls(question: string) {
+  const call = (name: string, input: unknown) => ({ name, arguments: JSON.stringify(input) });
+  if (/beacon|bidder/i.test(question)) {
+    const previous = { startDate: '2026-09-28', endDate: '2026-10-04' };
+    const current = { startDate: '2026-10-05', endDate: '2026-10-18' };
+    return [
+      call('compare_periods', { previous, current }),
+      call('bidder_performance', previous),
+      call('bidder_performance', current),
+      call('performance_summary', current),
+    ];
+  }
+
+  return [
+    call('compare_periods', {
+      previous: { startDate: '2026-09-07', endDate: '2026-09-13' },
+      current: { startDate: '2026-09-14', endDate: '2026-09-20' },
+    }),
+    call('current_configuration', {}),
+    call('configuration_history', { startDate: '2026-09-07', endDate: '2026-09-20' }),
+  ];
+}
+
+type Phase3Result = {
+  data?: {
+    kind: string;
+    period?: { startDate: string; endDate: string };
+    previous?: { estimatedRevenue: number };
+    current?: { estimatedRevenue: number };
+    configuration?: { settings: { floorCpm: number } };
+    history?: Array<{ before: { floorCpm: number } | null; after: { floorCpm: number } }>;
+    bidders?: Array<{ bidderId: string; responses: number; lateResponses: number }>;
+  };
+  evidence: Array<{ evidenceId: string; bidderId?: string }>;
+};
+
+/** Test model answers only from authorized tool JSON, never from generator scenarios. */
+function phase3Answer(results: Phase3Result[]): string {
+  const comparison = results.find((result) => result.data?.kind === 'period-comparison');
+  const reference = comparison?.evidence[0]?.evidenceId;
+  if (!reference || !comparison?.data?.previous || !comparison.data.current)
+    return 'No authorized observations were available.';
+
+  const observation = `Observation: Estimated revenue changed from $${comparison.data.previous.estimatedRevenue.toFixed(2)} to $${comparison.data.current.estimatedRevenue.toFixed(2)} [${reference}].`;
+  const periods = results.filter((result) => result.data?.kind === 'bidder-performance');
+  if (periods.length) {
+    const baseline = periods.find((result) => result.data?.period?.startDate === '2026-09-28');
+    const current = periods.find((result) => result.data?.period?.startDate === '2026-10-05');
+    const before = baseline?.data?.bidders?.find((bidder) => bidder.bidderId === 'beacon');
+    const after = current?.data?.bidders?.find((bidder) => bidder.bidderId === 'beacon');
+    const bidderReference = current?.evidence.find(
+      (entry) => entry.bidderId === 'beacon',
+    )?.evidenceId;
+    if (!before?.responses || !after?.responses || !bidderReference)
+      return 'No authorized bidder observations were available.';
+
+    return `${observation}\n\nBeacon late-offer share changed from ${((100 * before.lateResponses) / before.responses).toFixed(2)}% to ${((100 * after.lateResponses) / after.responses).toFixed(2)}% [${bidderReference}].\n\nHypothesis: Latency may affect eligibility; this comparison alone does not establish cause [${bidderReference}].\n\nRecommendation: Investigate latency using these period aggregates; synthetic estimated revenue is not verified payment [${bidderReference}].`;
+  }
+
+  const history = results.find((result) => result.data?.kind === 'configuration-history');
+  const configuration = results.find((result) => result.data?.kind === 'configuration');
+  const change = history?.data?.history?.at(-1);
+  const changeReference = history?.evidence.at(-1)?.evidenceId;
+  const configurationReference = configuration?.evidence[0]?.evidenceId;
+  if (
+    !change?.before ||
+    !changeReference ||
+    !configurationReference ||
+    !configuration?.data?.configuration
+  )
+    return 'No authorized configuration observations were available.';
+
+  return `${observation}\n\nThe recorded floor changed from $${change.before.floorCpm.toFixed(2)} to $${change.after.floorCpm.toFixed(2)} [${changeReference}]. Current floor is $${configuration.data.configuration.settings.floorCpm.toFixed(2)} [${configurationReference}].\n\nHypothesis: Timing may be related, but correlation is not proof [${reference}].\n\nRecommendation: Investigate a controlled comparison; synthetic estimated revenue is not verified payment [${reference}].`;
 }

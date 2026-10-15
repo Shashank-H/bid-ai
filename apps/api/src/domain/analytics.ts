@@ -29,6 +29,9 @@ function summary(records: readonly DailyMetrics[], period: PeriodInput): Perform
     },
   );
   const { winningCpmTotal, ...counts } = totals;
+  const hasWaitMetrics =
+    records.length > 0 && records.every((row) => row.auctionWaitMsTotal !== undefined);
+  const hasPartialDates = records.length > 0 && records.every((row) => row.partial !== undefined);
 
   return {
     ...counts,
@@ -38,21 +41,31 @@ function summary(records: readonly DailyMetrics[], period: PeriodInput): Perform
     estimatedRevenue: winningCpmTotal / 1000,
     fillRate: ratio(counts.filledOpportunities, counts.eligibleOpportunities),
     averageWinningCpm: ratio(winningCpmTotal, counts.filledOpportunities),
+    ...(hasWaitMetrics
+      ? {
+          averageAuctionWaitMs: ratio(
+            records.reduce((sum, row) => sum + row.auctionWaitMsTotal!, 0),
+            counts.auctions,
+          ),
+        }
+      : {}),
+    ...(hasPartialDates
+      ? { partialDates: records.filter((row) => row.partial).map((row) => row.date) }
+      : {}),
   };
 }
 
-export function metricEvidence(
+function metricEvidence(
   context: ExecutionContext,
-  records: readonly { date: string; bidderId?: string }[],
-  source: 'daily-metrics' | 'bidder-metrics',
+  records: readonly { date: string }[],
 ): EvidenceReference[] {
   return records.map((record) => {
-    const recordId = `${context.identity.publisherId}-${source}-${record.date}${record.bidderId ? `-${record.bidderId}` : ''}`;
+    const recordId = `${context.identity.publisherId}-daily-metrics-${record.date}`;
 
     return {
       evidenceId: recordId,
       publisherId: context.identity.publisherId,
-      source,
+      source: 'daily-metrics',
       recordId,
       observedAt: `${record.date}T00:00:00.000Z`,
     };
@@ -71,7 +84,7 @@ export class Analytics implements AnalyticsService {
         ? 'Performance totals; all revenue is estimated.'
         : 'No observations in this period.',
       data: { kind: 'performance-summary', metrics },
-      evidence: metricEvidence(context, records, 'daily-metrics'),
+      evidence: metricEvidence(context, records),
       findings: [],
     };
   }
@@ -85,11 +98,7 @@ export class Analytics implements AnalyticsService {
     const current = summary(currentRecords, periods.current);
     const previous = summary(previousRecords, periods.previous);
     const hasBoth = currentRecords.length > 0 && previousRecords.length > 0;
-    const evidence = metricEvidence(
-      context,
-      [...currentRecords, ...previousRecords],
-      'daily-metrics',
-    );
+    const evidence = metricEvidence(context, [...currentRecords, ...previousRecords]);
 
     return {
       summary: hasBoth
@@ -140,10 +149,22 @@ export class Analytics implements AnalyticsService {
         },
       );
       const { latencyWeight, latencyTotal, ...counts } = totals;
+      const optionalCounters = [
+        'acceptedResponses',
+        'rejectedResponses',
+        'timeouts',
+        'noBids',
+      ] as const;
+      const observedCounters = Object.fromEntries(
+        optionalCounters
+          .filter((key) => rows.every((row) => row[key] !== undefined))
+          .map((key) => [key, rows.reduce((sum, row) => sum + row[key]!, 0)]),
+      );
 
       return {
         bidderId,
         ...counts,
+        ...observedCounters,
         responseRate: ratio(counts.responses, counts.requests),
         winRate: ratio(counts.wins, counts.requests),
         averageLatencyMs: ratio(latencyTotal, latencyWeight),
@@ -152,7 +173,7 @@ export class Analytics implements AnalyticsService {
 
     return {
       summary: records.length
-        ? 'Bidder comparisons from observed metrics; revenue is estimated.'
+        ? 'Bidder comparisons from observed metrics. Responses are observed offers counted once across accepted/rejected outcomes; timeout can coexist with a later offer. Revenue is estimated.'
         : 'No bidder observations in this period.',
       data: {
         kind: 'bidder-performance',
@@ -160,7 +181,26 @@ export class Analytics implements AnalyticsService {
         currency: records[0]?.currency ?? 'USD',
         bidders,
       },
-      evidence: metricEvidence(context, records, 'bidder-metrics'),
+      evidence: ids.map((bidderId) => {
+        const recordId = `${context.identity.publisherId}-bidder-metrics-${bidderId}-${period.startDate}-${period.endDate}`;
+        const observedDate = records
+          .filter((record) => record.bidderId === bidderId)
+          .reduce(
+            (latest, record) => (record.date > latest ? record.date : latest),
+            period.startDate,
+          );
+
+        return {
+          evidenceId: recordId,
+          publisherId: context.identity.publisherId,
+          source: 'bidder-metrics' as const,
+          recordId,
+          observedAt: `${observedDate}T00:00:00.000Z`,
+          referenceType: 'period-aggregate' as const,
+          period,
+          bidderId,
+        };
+      }),
       findings: [],
     };
   }

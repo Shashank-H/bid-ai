@@ -1,15 +1,29 @@
 import { z } from 'zod';
-import { IdSchema, TimestampSchema } from './common.js';
+import { IdSchema, PeriodInputSchema, TimestampSchema } from './common.js';
 import { ConfigurationSettingsSchema } from './configuration.js';
 import { ToolDataSchema } from './analytics.js';
 
-export const EvidenceReferenceSchema = z.strictObject({
-  evidenceId: IdSchema,
-  publisherId: IdSchema,
-  source: z.enum(['daily-metrics', 'bidder-metrics', 'configuration', 'configuration-history']),
-  recordId: IdSchema,
-  observedAt: TimestampSchema,
-});
+export const EvidenceReferenceSchema = z
+  .strictObject({
+    evidenceId: IdSchema,
+    publisherId: IdSchema,
+    source: z.enum(['daily-metrics', 'bidder-metrics', 'configuration', 'configuration-history']),
+    recordId: IdSchema,
+    observedAt: TimestampSchema,
+    // Existing daily/configuration record references do not need new optional fields.
+    referenceType: z.enum(['record', 'period-aggregate']).optional(),
+    period: PeriodInputSchema.optional(),
+    bidderId: IdSchema.optional(),
+  })
+  .refine(
+    (reference) =>
+      reference.referenceType === 'period-aggregate'
+        ? reference.source === 'bidder-metrics' &&
+          reference.period !== undefined &&
+          reference.bidderId !== undefined
+        : reference.period === undefined,
+    { message: 'Period evidence must explicitly identify a bidder aggregate and its date range' },
+  );
 
 export const FindingSchema = z.strictObject({
   kind: z.enum(['observation', 'hypothesis', 'recommendation']),

@@ -1,17 +1,59 @@
+import type { PublisherDatasetMetadata } from '@bid/shared';
 import type { UserPublisherContext } from '../domain/interfaces.js';
-import { fixtureMetadata } from '../fixtures/publishers.js';
 
-export function investigationPrompt(identity: UserPublisherContext): string {
-  const { availablePeriod } = fixtureMetadata(identity.publisherId);
+function coverageInstructions(metadata: PublisherDatasetMetadata): string {
+  const period = metadata.availablePeriod;
 
+  if (!period || metadata.status === 'empty' || metadata.status === 'loading') {
+    return `- No ready observations are available for this publisher (dataset status: ${metadata.status ?? 'empty'}). Do not invent dates or substitute demo fixture data.`;
+  }
+
+  const partialDates = new Set(metadata.partialDates ?? []);
+  const completeDates: string[] = [];
+
+  for (
+    let date = Date.parse(period.startDate);
+    date <= Date.parse(period.endDate);
+    date += 86_400_000
+  ) {
+    const value = new Date(date).toISOString().slice(0, 10);
+    if (!partialDates.has(value)) completeDates.push(value);
+  }
+
+  const latest = completeDates.slice(-7);
+  const previous = completeDates.slice(-14, -7);
+  const comparison =
+    latest.length === 7 && previous.length === 7
+      ? `Resolve "last week" to the latest seven complete UTC dates, ${latest[0]} through ${latest[6]}, and the preceding week to ${previous[0]} through ${previous[6]}. Explain these dataset dates, not the current calendar date.`
+      : 'There are fewer than fourteen complete UTC dates. Do not invent two full comparison weeks; explain the available coverage.';
+
+  return [
+    `- Observations are available in USD from ${period.startDate} through ${period.endDate}, inclusive UTC dates.`,
+    ...(metadata.observedFrom && metadata.observedThrough
+      ? [
+          `- Exact observation bounds: ${metadata.observedFrom} through ${metadata.observedThrough}.`,
+        ]
+      : []),
+    ...(partialDates.size
+      ? [
+          `- Partial UTC dates: ${[...partialDates].join(', ')}. Their totals are not complete days; exclude them from full-week comparisons and do not extrapolate them.`,
+        ]
+      : []),
+    `- ${comparison}`,
+  ].join('\n');
+}
+
+export function investigationPrompt(
+  identity: UserPublisherContext,
+  metadata: PublisherDatasetMetadata,
+): string {
   return `You are a read-only publisher ad-operations investigation assistant.
 
 Scope and data:
 - The server authorizes publisher ${identity.publisherId}. Tools receive that identity from the server, not from your arguments.
-- Observations are available in USD from ${availablePeriod.startDate} through ${availablePeriod.endDate}, inclusive UTC.
-- Resolve "last week" to the last seven available dates, and the preceding week to the first seven dates. Explain these fixed dates, not the current calendar date.
+${coverageInstructions(metadata)}
+- All observations are synthetic. Label earnings "Estimated revenue". Do not imply these are paid ad-server earnings or live website measurements.
 - Every tool startDate/endDate must use YYYY-MM-DD only, never timestamps or time-of-day suffixes.
-- Label earnings "Estimated revenue". Do not imply these are paid ad-server earnings or live website measurements.
 
 Investigation:
 - Make one native function tool call per response when you need data; wait for its result before calling the next tool. Never print tool calls as text.

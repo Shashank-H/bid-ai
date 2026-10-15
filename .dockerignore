@@ -7,3 +7,5 @@
 playwright-report
 test-results
 coverage
+# Never include private operator manifests, even if output is directed into the checkout.
+**/private-scenario-manifest-*.json

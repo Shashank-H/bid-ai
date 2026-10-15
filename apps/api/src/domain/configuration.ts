@@ -10,6 +10,7 @@ import type {
   ConfigurationService,
   ExecutionContext,
 } from './interfaces.js';
+import { PREBID_PARAMETER_IMPACTS } from './prebid-configuration.js';
 
 function evidence(record: Configuration | ConfigurationHistory): EvidenceReference {
   const source = 'historyId' in record ? 'configuration-history' : 'configuration';
@@ -35,9 +36,13 @@ export class Configurations implements ConfigurationService {
 
     return {
       summary: configuration
-        ? 'Current configuration; read-only.'
+        ? 'Current configuration; read-only. Native Prebid settings and derived summaries are synthetic where marked; parameter tradeoffs are not predictions.'
         : 'No configuration is available.',
-      data: { kind: 'configuration', configuration },
+      data: {
+        kind: 'configuration',
+        configuration,
+        ...(configuration?.prebid ? { parameterImpacts: PREBID_PARAMETER_IMPACTS } : {}),
+      },
       evidence: configuration ? [evidence(configuration)] : [],
       findings: [],
     };
@@ -48,9 +53,16 @@ export class Configurations implements ConfigurationService {
 
     return {
       summary: history.length
-        ? 'Recorded changes with updating-user attribution; timing alone does not prove causation.'
+        ? 'Recorded changes with updating-user attribution, synthetic where marked; timing alone does not prove causation.'
         : 'No recorded changes in this period.',
-      data: { kind: 'configuration-history', period, history: [...history] },
+      data: {
+        kind: 'configuration-history',
+        period,
+        history: [...history],
+        ...(history.some((record) => record.afterPrebid)
+          ? { parameterImpacts: PREBID_PARAMETER_IMPACTS }
+          : {}),
+      },
       evidence: history.map(evidence),
       findings: [],
     };

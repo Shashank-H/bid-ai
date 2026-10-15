@@ -3,6 +3,8 @@ import type {
   Configuration,
   ConfigurationHistory,
   DailyMetrics,
+  DatasetDescriptor,
+  PublisherDatasetMetadata,
   PeriodInput,
   PublisherMembership,
   ToolResult,
@@ -33,6 +35,11 @@ export interface UserRepository {
 export interface AnalyticsRepository {
   daily(context: ExecutionContext, period: PeriodInput): Promise<readonly DailyMetrics[]>;
   bidders(context: ExecutionContext, period: PeriodInput): Promise<readonly BidderMetrics[]>;
+}
+
+export interface DatasetRepository {
+  getDataset(context: ExecutionContext): Promise<DatasetDescriptor | null>;
+  getPublicMetadata(context: ExecutionContext): Promise<PublisherDatasetMetadata>;
 }
 
 export interface ConfigurationRepository {

@@ -8,6 +8,8 @@ services:
       DYNAMODB_ENDPOINT: http://dynamodb:8000
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
       APP_ORIGIN: http://agent-test-web
+      PHASE3_TEST_PREFIX: ${PHASE3_TEST_PREFIX:-}
+      PHASE3_READ_EXISTING_DATA: ${PHASE3_READ_EXISTING_DATA:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,3 +49,7 @@ services:
     environment:
       WEB_BASE_URL: http://agent-test-web
       AGENT_E2E: 'true'
+      PHASE3_TEST_PREFIX: ${PHASE3_TEST_PREFIX:-}
+      PHASE3_READ_EXISTING_DATA: ${PHASE3_READ_EXISTING_DATA:-}
+      PHASE3_TEST_PASSWORD_A: ${PHASE3_TEST_PASSWORD_A:-}
+      PHASE3_TEST_PASSWORD_B: ${PHASE3_TEST_PASSWORD_B:-}

@@ -19,8 +19,9 @@
     "db:reset": "pnpm --filter @bid/api db:reset",
     "model:probe": "pnpm --filter @bid/api model:probe",
     "users:bootstrap": "pnpm --filter @bid/api users:bootstrap",
-    "data:seed": "pnpm --filter @bid/api data:seed",
-    "data:generate": "pnpm --filter @bid/api data:generate",
+    "data:build": "pnpm --filter @bid/shared build && tsc -p scripts/phase-3-data/tsconfig.json && node -e \"const fs=require('node:fs');const link='scripts/phase-3-data/dist/node_modules';fs.rmSync(link,{force:true});fs.symlinkSync('../../../apps/api/node_modules',link,'dir')\"",
+    "data:generate": "node scripts/phase-3-data/dist/scripts/phase-3-data/cli.js data:generate",
+    "data:verify": "node scripts/phase-3-data/dist/scripts/phase-3-data/cli.js data:verify",
     "data:reconcile": "pnpm --filter @bid/api data:reconcile",
     "postgres:init": "pnpm --filter @bid/api postgres:init",
     "prepare": "husky"

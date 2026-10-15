@@ -1,7 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { ConfigurationError, readModelSettings, readTracingSettings } from '../env.js';
 import { executeDatabaseCommand, parseOptions } from './database.js';
-import { deferredCommands, executeDeferredCommand, NotImplementedError } from './deferred.js';
 
 const help = `Foundation commands:
   db:init                         Non-destructive empty-table initialization
@@ -12,8 +11,8 @@ const help = `Foundation commands:
   model:probe                     Probe configured streaming and function-call support
   users:bootstrap                 Explicit repeat-safe development-user initialization
   postgres:init                   Apply application and LangGraph saver migrations
-  data:seed | data:reconcile       Phase 2 placeholders; return NOT_IMPLEMENTED
-  data:generate                   Phase 3 placeholder; returns NOT_IMPLEMENTED
+  data:reconcile [--publisher <id>] Rebuild verified aggregates from persisted auction data
+  data:generate [--seed <value>]   Requires dedicated data-generator image; never seeds from API
 
 No data is loaded during ordinary startup. Model settings stay server-side.
 `;
@@ -25,7 +24,8 @@ const commands = [
   'model:probe',
   'users:bootstrap',
   'postgres:init',
-  ...Object.keys(deferredCommands),
+  'data:generate',
+  'data:reconcile',
 ];
 
 export async function runCli(
@@ -54,9 +54,12 @@ export async function runCli(
   }
 
   try {
-    if (command in deferredCommands) {
-      parseOptions(options, []);
-      executeDeferredCommand(command as keyof typeof deferredCommands);
+    if (command === 'data:generate') {
+      parseOptions(options, ['--seed']);
+      output(
+        'GENERATOR_REQUIRED: use docker compose --profile data run --rm data-generator data:generate [--seed <value>]; no data was written',
+      );
+      return 1;
     }
 
     if (command === 'model:probe') {
@@ -87,6 +90,9 @@ export async function runCli(
 
       const { initializePostgres } = await import('./postgres-init.js');
       output(JSON.stringify(await initializePostgres(env)));
+    } else if (command === 'data:reconcile') {
+      const { executeReconciliation } = await import('./data-reconcile.js');
+      output(JSON.stringify(await executeReconciliation(options, env)));
     } else if (command === 'users:bootstrap') {
       parseOptions(options, []);
 
@@ -98,7 +104,7 @@ export async function runCli(
 
     return 0;
   } catch (error) {
-    if (error instanceof ConfigurationError || error instanceof NotImplementedError) {
+    if (error instanceof ConfigurationError) {
       output(error.message);
 
       return 1;
@@ -117,7 +123,7 @@ export async function runCli(
     // SDK/provider payloads are intentionally never printed by operational commands.
     const message =
       error instanceof Error &&
-      /^(RESET_REFUSED|INVALID_ARGUMENTS|INCOMPATIBLE_SCHEMA|INCOMPATIBLE_TTL|TTL_TRANSITION_PENDING|INVALID_VERIFICATION_TOKEN|BOOTSTRAP_CONFLICT|DATABASE_NOT_READY):?/.test(
+      /^(RESET_REFUSED|INVALID_ARGUMENTS|INCOMPATIBLE_SCHEMA|INCOMPATIBLE_TTL|TTL_TRANSITION_PENDING|INVALID_VERIFICATION_TOKEN|BOOTSTRAP_CONFLICT|DATABASE_NOT_READY|DATASET_NOT_READY|INVALID_DATA|SEED_REFUSED|WRITE_EXHAUSTED):?/.test(
         error.message,
       )
         ? error.message
