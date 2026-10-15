@@ -683,8 +683,23 @@ export function Chat({
               Data context
             </summary>
             <p className="hint">
-              {auth.availablePeriod.startDate} to {auth.availablePeriod.endDate} UTC
+              {auth.availablePeriod
+                ? `${auth.availablePeriod.startDate} to ${auth.availablePeriod.endDate} UTC`
+                : auth.status === 'loading'
+                  ? 'Dataset loading; observations are not yet available.'
+                  : 'No dataset available.'}
             </p>
+            {auth.observedFrom && auth.observedThrough && (
+              <p className="hint">
+                Observation bounds: {auth.observedFrom} to {auth.observedThrough}.
+              </p>
+            )}
+            {!!auth.partialDates?.length && (
+              <p className="hint">
+                Partial UTC dates: {auth.partialDates.join(', ')}. Weekly comparisons use complete
+                dates only.
+              </p>
+            )}
             <p className="hint">
               Synthetic demo data. Earnings are estimated revenue. Tools cannot change configuration
               or deploy to your website.

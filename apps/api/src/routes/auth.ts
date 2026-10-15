@@ -3,12 +3,14 @@ import { HttpError, unauthorized } from '../errors.js';
 import { hashPassword, LoginInputSchema, verifyPassword } from '../auth/credentials.js';
 import { authCookie, issueToken } from '../auth/token.js';
 import type { Authorization } from '../auth/authorization.js';
-import { fixtureMetadata } from '../fixtures/publishers.js';
+import { fixtureDatasetMetadata } from '../domain/runtime-data.js';
+import type { DatasetMetadataProvider } from '../domain/runtime-data.js';
 
 export function registerAuthRoutes(
   app: FastifyInstance,
   authorization: Authorization,
   cancelUser: (userId: string) => void = () => {},
+  getMetadata: DatasetMetadataProvider = fixtureDatasetMetadata,
 ) {
   const attempts = new Map<string, { count: number; until: number }>();
   const dummyHash = hashPassword('unused-timing-equalization-password');
@@ -51,13 +53,18 @@ export function registerAuthRoutes(
       user.userId,
       Math.floor(now / 1000) + settings.lifetimeSeconds,
     );
+    const metadata = await getMetadata({
+      identity: resolved.identity,
+      correlationId: request.id,
+      signal: AbortSignal.timeout(8000),
+    });
     reply.header('Set-Cookie', authCookie(issueToken(user.userId, settings), settings));
     reply.header('Cache-Control', 'no-store');
 
     return {
       user: resolved.user,
       publisherId: resolved.identity.publisherId,
-      ...fixtureMetadata(resolved.identity.publisherId),
+      ...metadata,
     };
   });
 
@@ -79,12 +86,17 @@ export function registerAuthRoutes(
 
   app.get('/api/auth/me', async (request, reply) => {
     const resolved = await authorization.resolve(request);
+    const metadata = await getMetadata({
+      identity: resolved.identity,
+      correlationId: request.id,
+      signal: AbortSignal.timeout(8000),
+    });
     reply.header('Cache-Control', 'no-store');
 
     return {
       user: resolved.user,
       publisherId: resolved.identity.publisherId,
-      ...fixtureMetadata(resolved.identity.publisherId),
+      ...metadata,
     };
   });
 }

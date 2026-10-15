@@ -11,23 +11,20 @@ it('prints command help without needing configuration and rejects unknown comman
   expect((await call(['--help'])).code).toBe(0);
   expect((await call(['model:probe', '--help'])).text).toContain('streaming');
   expect((await call(['unknown', '--help'])).code).toBe(2);
+  expect((await call(['data:seed'])).code).toBe(2);
   expect((await call(['db:verify', '--unknown', 'bad'])).text).toContain('INVALID_ARGUMENTS');
 });
 
-it('future commands fail visibly with the correct owning phase and never write data', async () => {
-  for (const [command, phase] of [
-    ['data:seed', 2],
-    ['data:reconcile', 2],
-    ['data:generate', 3],
-  ] as const) {
-    const result = await call([command]);
+it('keeps generation isolated and validates reconciliation arguments before database access', async () => {
+  expect((await call(['data:generate', '--help'])).code).toBe(0);
+  expect((await call(['data:reconcile', '--help'])).code).toBe(0);
+  expect((await call(['data:reconcile', '--seed', '123'])).text).toContain('INVALID_ARGUMENTS');
 
-    expect(result.code).toBe(1);
-    expect(result.text).toContain(`NOT_IMPLEMENTED: ${command} belongs to Phase ${phase}`);
-    expect(result.text).toContain('no data was written');
-    expect((await call([command, '--help'])).code).toBe(0);
-    expect((await call([command, '--seed', '123'])).text).toContain('INVALID_ARGUMENTS');
-  }
+  const generation = await call(['data:generate']);
+
+  expect(generation.code).toBe(1);
+  expect(generation.text).toContain('data-generator');
+  expect(generation.text).not.toContain('NOT_IMPLEMENTED');
 });
 
 it('rejects destructive or invalid configuration before any database request', async () => {

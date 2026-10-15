@@ -4,7 +4,7 @@ A publisher ad-ops assistant for investigating auction performance with evidence
 
 ## Current capabilities
 
-Publisher login, persistent streaming investigation chat, Stop/resume, numerical tool results and evidence links are implemented. The workspace separates history, messages and tool activity into three columns, following [the design system](DESIGN.md). New chats remain unsaved drafts until the first message is sent. Five read-only tools investigate small, explicitly labelled demo fixtures for two isolated publishers. The agent uses LangGraph with the real OpenAI SDK; model settings stay server-side. Configuration changes and historical datasets remain deferred.
+Publisher login, persistent streaming investigation chat, Stop/resume, numerical tool results and evidence links are implemented. The workspace separates history, messages and tool activity into three columns, following [the design system](DESIGN.md). New chats remain unsaved drafts until the first message is sent. Five read-only tools investigate either labelled fixtures or publisher-scoped DynamoDB datasets, including native Prebid configuration history and bidder evidence. An explicit, one-time generator creates deterministic eight-week synthetic auction data for two publishers with five bidders each. Historical datasets are ready in `bid-publisher-data`, using one uncompressed auction item with detailed bidder outcomes; fixture and persisted browser flows have been verified. The agent uses LangGraph with the real OpenAI SDK; model settings stay server-side. Manual configuration editing and agent mutation remain deferred.
 
 React/Fastify plus **DynamoDB Local** for users/publisher records and **PostgreSQL** for conversations/LangGraph checkpoints. Drizzle manages application SQL migrations; LangGraph's official saver manages its own schema. Authentication is stateless signed cookies—**no session data is stored in any database**. Logout clears the cookie; a copied token remains valid until expiry.
 
@@ -27,6 +27,8 @@ docker compose up -d --wait
 
 Open [localhost:8080](http://localhost:8080). API/web/DynamoDB host bindings are loopback-only; Postgres has no host port. Local demo defaults include the existing demo passwords and a public signing key; do not use these for a shared deployment. Ollama defaults to `qwen3.5:9b` with no real API key. Docker Desktop's built-in `host.docker.internal:11434` bridge reaches your local Ollama without an extra proxy or system-service changes; the first model load can take about 70 seconds. Normal startup does not seed data, migrate SQL or contact the model. See [demo accounts](docs/requirements/phase%201/DEMO-ACCOUNTS.md) for this checkout's explicitly requested **demo-only** credentials/setup status; never reuse those passwords.
 
+For historical data, follow the [dataset runbook](docs/requirements/phase%203/RUNBOOK.md). Generation runs in a separate command image, never during startup; use `REPOSITORY_MODE=database` with the seeded `TABLE_PREFIX` only after its datasets are ready. Interrupted loads are not automatically resumed or replaced.
+
 ## Check
 
 ```sh
@@ -46,3 +48,4 @@ See the [runbook](docs/architecture-and-implementation/LOCAL-DEVELOPMENT.md), [v
 - [Implementation roadmap](docs/architecture-and-implementation/IMPLEMENTATION-ROADMAP.md)
 - [Requirements](docs/requirements/Full-Requirements.md) · [Exercise brief](docs/architecture-and-implementation/Full-Coding-Task.md)
 - [Read-only agent plan](docs/requirements/phase%201/PLAN.md) · [Foundation plan](docs/requirements/phase%200/PLAN.md) · [Initial foundation verification](docs/requirements/phase%200/VERIFICATION.md)
+- [Historical dataset plan](docs/requirements/phase%203/PLAN.md) · [Data verification / load status](docs/requirements/phase%203/DATA-VERIFICATION.md) · [Persisted browser verification](docs/requirements/phase%203/BROWSER-VERIFICATION.md)

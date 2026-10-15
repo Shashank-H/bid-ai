@@ -2,15 +2,29 @@ import type { ToolResult } from '@bid/shared';
 import type { ExecutionContext } from '../domain/interfaces.js';
 import { HttpError } from '../errors.js';
 import { readOnlyTools } from './registry.js';
+import type { ReadOnlyToolDefinition } from './types.js';
+
+export type ToolDispatcher = (
+  name: string,
+  argumentsJson: string,
+  context: ExecutionContext,
+) => Promise<ToolResult>;
+
+type ToolRegistry = readonly ReadOnlyToolDefinition<unknown, ToolResult>[];
+
+export function createToolDispatcher(tools: ToolRegistry): ToolDispatcher {
+  return (name, argumentsJson, context) => dispatchTool(name, argumentsJson, context, tools);
+}
 
 export async function dispatchTool(
   name: string,
   argumentsJson: string,
   context: ExecutionContext,
+  tools: ToolRegistry = readOnlyTools,
 ): Promise<ToolResult> {
   context.signal.throwIfAborted();
 
-  const tool = readOnlyTools.find((entry) => entry.name === name);
+  const tool = tools.find((entry) => entry.name === name);
 
   if (!tool || Buffer.byteLength(argumentsJson) > 16_384)
     throw new HttpError(400, 'INVALID_INPUT', 'Unknown tool or oversized arguments.');

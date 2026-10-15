@@ -80,19 +80,32 @@ export function ToolResults({ turnId, tools }: { turnId: string; tools: SavedToo
                 >
                   <summary>
                     <Icon name="evidence" />
-                    {entry.source} · {entry.observedAt.slice(0, 10)}
+                    {entry.source} ·{' '}
+                    {entry.referenceType === 'period-aggregate' && entry.period
+                      ? `${entry.period.startDate} to ${entry.period.endDate}`
+                      : entry.observedAt.slice(0, 10)}
                   </summary>
                   <dl>
                     <dt>Evidence ID</dt>
                     <dd>{entry.evidenceId}</dd>
-                    <dt>Record</dt>
+                    <dt>{entry.referenceType === 'period-aggregate' ? 'Aggregate' : 'Record'}</dt>
                     <dd>{entry.recordId}</dd>
+                    {entry.referenceType === 'period-aggregate' && entry.period && (
+                      <>
+                        <dt>Bidder</dt>
+                        <dd>{entry.bidderId}</dd>
+                        <dt>Period (UTC dates)</dt>
+                        <dd>
+                          {entry.period.startDate} to {entry.period.endDate}
+                        </dd>
+                      </>
+                    )}
                     <dt>Publisher</dt>
                     <dd>{entry.publisherId}</dd>
                     <dt>Observed at (UTC)</dt>
                     <dd>{entry.observedAt}</dd>
                     <dt>Data</dt>
-                    <dd>Demo observations</dd>
+                    <dd>Synthetic observations · not verified paid revenue</dd>
                   </dl>
                 </details>
               ))}

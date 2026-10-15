@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { IdSchema, PeriodInputSchema, TimestampSchema } from './common.js';
+import { IdSchema, TimestampSchema } from './common.js';
+import { PublisherDatasetMetadataSchema } from './dataset.js';
 import { PublicUserSchema } from './identity.js';
 import { ToolResultSchema } from './protocol.js';
 
@@ -10,10 +11,9 @@ export const DuplicateTurnResponseSchema = z.strictObject({
   status: z.enum(['running', 'completed', 'interrupted', 'cancelled', 'error']),
 });
 
-export const AuthResponseSchema = z.strictObject({
+export const AuthResponseSchema = PublisherDatasetMetadataSchema.extend({
   user: PublicUserSchema,
   publisherId: IdSchema,
-  availablePeriod: PeriodInputSchema,
 });
 export const ConversationSchema = z.strictObject({
   id: z.uuid(),

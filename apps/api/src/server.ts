@@ -9,11 +9,12 @@ import { createPostgres, postgresUrl } from './db/postgres.js';
 import { ConversationRepository } from './db/conversations.js';
 import { AgentService } from './agent/service.js';
 import { reportFailure } from './observability/diagnostics.js';
+import { createRuntimeData } from './domain/runtime-data.js';
 
 let tracing: TracingRuntime | undefined;
 
 try {
-  const { database: settings } = readEnvironment(process.env);
+  const { database: settings, repositoryMode } = readEnvironment(process.env);
   const tracingSettings = readTracingSettings(process.env);
   const { initializeTracing } = await import('./observability/tracing.js');
   tracing = initializeTracing(tracingSettings, { secrets: [process.env['LLM_API_KEY'] ?? ''] });
@@ -22,6 +23,7 @@ try {
     new IdentityRepository(client, settings.tablePrefix),
     () => readAuthSettings(process.env),
   );
+  const runtimeData = createRuntimeData(repositoryMode, client, settings.tablePrefix);
   const postgres = createPostgres(postgresUrl(process.env));
   const conversations = new ConversationRepository(postgres);
   const { modelRunner } = await import('./agent/model.js');
@@ -30,6 +32,8 @@ try {
     authorization,
     modelRunner(process.env, tracing),
     tracing,
+    undefined,
+    runtimeData,
   );
   const app = buildApp(
     {
@@ -37,7 +41,12 @@ try {
         (await databaseReady(client, settings.tablePrefix)) && (await conversations.assertReady()),
     },
     true,
-    { authorization, agent, cancelUser: (userId) => agent.cancelUser(userId) },
+    {
+      authorization,
+      agent,
+      getMetadata: runtimeData.getMetadata,
+      cancelUser: (userId) => agent.cancelUser(userId),
+    },
   );
 
   app.addHook('onClose', async () => {

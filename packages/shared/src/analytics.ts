@@ -8,6 +8,7 @@ import {
   RatioSchema,
 } from './common.js';
 import { ConfigurationHistorySchema, ConfigurationSchema } from './configuration.js';
+import { ConfigurationParameterImpactSchema } from './prebid.js';
 
 export const PerformanceSummarySchema = z.strictObject({
   period: PeriodInputSchema,
@@ -20,12 +21,18 @@ export const PerformanceSummarySchema = z.strictObject({
   estimatedRevenue: AmountSchema,
   fillRate: RatioSchema,
   averageWinningCpm: AmountSchema.nullable(),
+  averageAuctionWaitMs: AmountSchema.nullable().optional(),
+  partialDates: z.array(z.iso.date()).max(2).optional(),
 });
 
 export const BidderSummarySchema = z.strictObject({
   bidderId: IdSchema,
   requests: CounterSchema,
   responses: CounterSchema,
+  acceptedResponses: CounterSchema.optional(),
+  rejectedResponses: CounterSchema.optional(),
+  timeouts: CounterSchema.optional(),
+  noBids: CounterSchema.optional(),
   eligibleResponses: CounterSchema,
   lateResponses: CounterSchema,
   wins: CounterSchema,
@@ -53,11 +60,13 @@ export const ToolDataSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('configuration'),
     configuration: ConfigurationSchema.nullable(),
+    parameterImpacts: z.array(ConfigurationParameterImpactSchema).max(50).optional(),
   }),
   z.strictObject({
     kind: z.literal('configuration-history'),
     period: PeriodInputSchema,
     history: z.array(ConfigurationHistorySchema).max(50),
+    parameterImpacts: z.array(ConfigurationParameterImpactSchema).max(50).optional(),
   }),
 ]);
 

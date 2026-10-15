@@ -16,6 +16,9 @@ import { investigationPrompt } from './prompt.js';
 import { validateAnswer } from './evidence.js';
 import { ConfigurationError, readAgentSettings } from '../env.js';
 import { reportFailure } from '../observability/diagnostics.js';
+import { fixtureDatasetMetadata } from '../domain/runtime-data.js';
+import type { RuntimeDataDependencies } from '../domain/runtime-data.js';
+import { dispatchTool } from '../tools/dispatch.js';
 
 export type AcceptedTurn = Awaited<ReturnType<ConversationRepository['accept']>>;
 export type ModelContext = {
@@ -45,6 +48,7 @@ export class AgentService {
     private readonly model: ModelRunner,
     private readonly tracing: TracingRuntime,
     private readonly settings = readAgentSettings(),
+    private readonly runtimeData: Partial<RuntimeDataDependencies> = {},
   ) {
     this.saverPool = new pg.Pool({
       connectionString: conversations.postgres.pool.options.connectionString,
@@ -157,6 +161,7 @@ export class AgentService {
       );
       const graph = buildAgentGraph(saver, {
         context,
+        dispatchTool: this.runtimeData.dispatchTool ?? dispatchTool,
         tracing: this.tracing,
         guard,
         conversationId: conversation.id,
@@ -202,8 +207,9 @@ export class AgentService {
       const history = resume
         ? { messages: [], omitted: false }
         : await this.conversations.recentContext(identity, conversation.id);
+      const metadata = await (this.runtimeData.getMetadata ?? fixtureDatasetMetadata)(context);
       const messages = [
-        { role: 'system' as const, content: investigationPrompt(identity) },
+        { role: 'system' as const, content: investigationPrompt(identity, metadata) },
         ...(history.omitted
           ? [
               {

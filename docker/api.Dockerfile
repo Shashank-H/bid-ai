@@ -17,6 +17,23 @@ CMD ["pnpm", "test"]
 FROM workspace AS production-package
 RUN pnpm --filter @bid/api deploy --legacy --prod /opt/api
 
+# Command-only compilation: private simulation/scenarios never enter the API package.
+FROM workspace AS generator-build
+# The host build link is not a runtime dependency; deploy supplies production modules below.
+RUN pnpm data:build && rm scripts/phase-3-data/dist/node_modules
+
+FROM node:24.18.0-bookworm-slim AS data-generator
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=production-package --chown=node:node /opt/api/node_modules/ ./node_modules/
+COPY --from=generator-build --chown=node:node /workspace/scripts/phase-3-data/dist/ ./
+COPY package.json ./package.json
+RUN mkdir /output && chown node:node /output
+ENV PHASE3_OUTPUT_DIR=/output
+USER node
+ENTRYPOINT ["node", "scripts/phase-3-data/cli.js"]
+CMD ["--help"]
+
 FROM node:24.18.0-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app

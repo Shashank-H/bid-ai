@@ -15,7 +15,6 @@
     "db:reset": "node dist/commands/cli.js db:reset",
     "model:probe": "node dist/commands/cli.js model:probe",
     "users:bootstrap": "node dist/commands/cli.js users:bootstrap",
-    "data:seed": "node dist/commands/cli.js data:seed",
     "data:generate": "node dist/commands/cli.js data:generate",
     "data:reconcile": "node dist/commands/cli.js data:reconcile",
     "postgres:init": "node dist/commands/cli.js postgres:init",
