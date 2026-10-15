@@ -7,35 +7,90 @@
 }
 
 :root {
+  color-scheme: light;
   font-family:
     Manrope,
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #101828;
-  background: #ffffff;
+  color: var(--text);
+  background: var(--canvas);
   font-synthesis: none;
   line-height: 1.5;
+  --canvas: #ffffff;
+  --text: #101828;
   --accent: #f05223;
   --accent-hover: #e13615;
   --muted: #475467;
   --border: #e2e3e5;
   --surface: #f7f7f7;
+  --raised-surface: #eeeeef;
   --warm-surface: #fef4ee;
+  --link: #781d16;
   --error: #781d16;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --canvas: #151311;
+  --text: #f3eee9;
+  --accent: #ff8056;
+  --accent-hover: #ff9a76;
+  --muted: #b6aaa0;
+  --border: #3b342f;
+  --surface: #211d1a;
+  --raised-surface: #2b2521;
+  --warm-surface: #34231d;
+  --link: #ff9a76;
+  --error: #ff9c8e;
 }
 
 * {
   box-sizing: border-box;
 }
-body {
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 button,
 input,
 textarea {
   font: inherit;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 45%, transparent) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 72%, var(--muted));
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 button,
 input,
@@ -49,7 +104,7 @@ button {
   padding: 0 16px;
   border: 1px solid transparent;
   font-weight: 600;
-  color: #101828;
+  color: #17110e;
   background: var(--accent);
   cursor: pointer;
   white-space: nowrap;
@@ -73,7 +128,7 @@ a:focus-visible {
   outline-offset: 3px;
 }
 a {
-  color: #781d16;
+  color: var(--link);
   text-decoration: underline;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
@@ -105,11 +160,11 @@ h2 {
 }
 .secondary {
   background: transparent;
-  color: #101828;
+  color: var(--text);
   border-color: var(--border);
 }
 .secondary:hover:not(:disabled) {
-  background: #eeeeef;
+  background: var(--raised-surface);
 }
 .text-button {
   background: transparent;
@@ -118,8 +173,8 @@ h2 {
   font-size: 13px;
 }
 .text-button:hover:not(:disabled) {
-  background: #eeeeef;
-  color: #101828;
+  background: var(--raised-surface);
+  color: var(--text);
 }
 .sr-only {
   position: absolute;
@@ -133,9 +188,17 @@ h2 {
   border: 0;
 }
 
+.theme-toggle {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.theme-account-toggle {
+  margin-top: 4px;
+}
 .app.authenticated {
-  height: 100dvh;
-  min-height: 480px;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -156,6 +219,7 @@ h2 {
 .chat-layout {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr) 320px;
 }
@@ -208,7 +272,7 @@ h2 {
 }
 .new-chat {
   text-align: left;
-  background: #ffffff;
+  background: var(--raised-surface);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -359,11 +423,11 @@ h2 {
   text-overflow: ellipsis;
 }
 .history-item:hover:not(:disabled) {
-  background: #eeeeef;
-  color: #101828;
+  background: var(--raised-surface);
+  color: var(--text);
 }
 .history-item[aria-current] {
-  color: #101828;
+  color: var(--text);
   font-weight: 600;
   background: var(--warm-surface);
   border-left: 2px solid var(--accent);
@@ -496,7 +560,7 @@ h2 {
 }
 .composer {
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--surface);
   padding: 16px;
 }
 .composer:focus-within {
@@ -591,7 +655,7 @@ h2 {
 }
 .tool-card {
   border: 1px solid var(--border);
-  background: #ffffff;
+  background: var(--surface);
   padding: 12px;
   margin-bottom: 12px;
   font-size: 12px;
@@ -667,6 +731,7 @@ dd {
 }
 .app-header {
   margin-bottom: 40px;
+  padding-right: 88px;
 }
 .app-header h1 {
   font-size: 30px;
@@ -691,7 +756,7 @@ dd {
   color: inherit;
   border: 1px solid var(--border);
   padding: 12px;
-  background: #ffffff;
+  background: var(--surface);
   min-height: 44px;
 }
 .login-form input:disabled {
@@ -720,6 +785,10 @@ dd {
   .chat-layout {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .chat-panel {
+    min-height: 0;
+    overflow: hidden;
   }
   .side-panel {
     border: 0;

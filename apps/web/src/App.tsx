@@ -10,6 +10,23 @@ export function App() {
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [darkTheme, setDarkTheme] = useState(() => {
+    try {
+      return window.localStorage.getItem('theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkTheme ? 'dark' : 'light';
+
+    try {
+      window.localStorage.setItem('theme', darkTheme ? 'dark' : 'light');
+    } catch {
+      // Theme still works for this session when storage is unavailable.
+    }
+  }, [darkTheme]);
 
   useEffect(() => {
     let disposed = false;
@@ -53,6 +70,17 @@ export function App() {
   return (
     <main className={`app${auth ? ' authenticated' : ' signed-out'}`}>
       {!auth && (
+        <button
+          className="theme-toggle secondary"
+          type="button"
+          aria-label={`Switch to ${darkTheme ? 'light' : 'dark'} theme`}
+          aria-pressed={darkTheme}
+          onClick={() => setDarkTheme((current) => !current)}
+        >
+          {darkTheme ? '☀ Light' : '☾ Dark'}
+        </button>
+      )}
+      {!auth && (
         <header className="app-header">
           <h1>
             Bid Intelligence<span className="brand-dot">.</span>
@@ -82,6 +110,8 @@ export function App() {
               auth={auth}
               onUnauthorized={clearAuth}
               onLogout={() => void logout()}
+              darkTheme={darkTheme}
+              onToggleTheme={() => setDarkTheme((current) => !current)}
             />
           ) : (
             <Login onLogin={setAuth} />
