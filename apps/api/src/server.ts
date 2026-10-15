@@ -45,6 +45,7 @@ try {
       authorization,
       agent,
       getMetadata: runtimeData.getMetadata,
+      dashboard: runtimeData.dashboard,
       cancelUser: (userId) => agent.cancelUser(userId),
     },
   );

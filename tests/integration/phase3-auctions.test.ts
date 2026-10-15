@@ -32,6 +32,8 @@ import {
   loadingDescriptor,
 } from '../../scripts/phase-3-data/configuration.js';
 import { generateDay } from '../../scripts/phase-3-data/simulation.js';
+import { Dashboard } from '../../apps/api/src/domain/dashboard.js';
+import { Analytics } from '../../apps/api/src/domain/analytics.js';
 
 const require = createRequire(new URL('../../apps/api/package.json', import.meta.url));
 const { DeleteTableCommand } = require('@aws-sdk/client-dynamodb');
@@ -179,6 +181,17 @@ it('persists one row per auction with lossless ordered reconciliation and legacy
       status: 503,
     });
     await expect(
+      new Dashboard(reader).query(context(publisherId), {
+        view: {
+          kind: 'publisher-performance',
+          metric: 'estimatedRevenue',
+          period: loading[index]!.availablePeriod,
+        },
+        page: 1,
+        pageSize: 20,
+      }),
+    ).rejects.toMatchObject({ status: 503 });
+    await expect(
       reconcilePublisherData(client, prefix, publisherId, { write: false }),
     ).rejects.toThrow('DATASET_NOT_READY');
 
@@ -223,6 +236,31 @@ it('persists one row per auction with lossless ordered reconciliation and legacy
     expect(await reader.bidders(context(publisherId), ready[index]!.availablePeriod)).toHaveLength(
       5,
     );
+    const period = ready[index]!.availablePeriod;
+    const dashboard = await new Dashboard(reader).query(context(publisherId), {
+      view: {
+        kind: 'bidder-performance',
+        metric: 'averageLatencyMs',
+        period,
+        bidderIds: ['beacon'],
+      },
+      page: 1,
+      pageSize: 20,
+    });
+    const tool = await new Analytics(reader).bidderPerformance(context(publisherId), period);
+    expect(dashboard.bidders).toEqual(
+      tool.data?.kind === 'bidder-performance'
+        ? tool.data.bidders.filter((row) => row.bidderId === 'beacon')
+        : [],
+    );
+    expect(dashboard.coverage[0]?.partialDates).toEqual([date]);
+    expect(
+      tool.evidence.find((entry) => entry.bidderId === 'beacon')?.analytics?.coverage[0]
+        ?.partialDates,
+    ).toEqual([date]);
+    expect(dashboard.records).toHaveLength(1);
+    expect(dashboard.records[0]?.publisherId).toBe(publisherId);
+    expect(dashboard.availableBidderIds).toHaveLength(5);
   }
   await expect(writer.preflightEmpty(loading)).rejects.toThrow('DATA_CONFLICT');
 });

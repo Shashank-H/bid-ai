@@ -123,6 +123,7 @@ const app = buildApp({ checkReady: () => conversations.assertReady() }, false, {
   agent: service,
   cancelUser: (userId: string) => service.cancelUser(userId),
   getMetadata: runtime.getMetadata,
+  dashboard: runtime.dashboard,
 });
 let closing = false;
 

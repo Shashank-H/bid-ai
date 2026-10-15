@@ -38,12 +38,15 @@ export async function api<T>(
   path: string,
   schema: { parse(value: unknown): T },
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   const response = await fetch(path, {
     method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
-    signal: AbortSignal.timeout(8000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(8000)])
+      : AbortSignal.timeout(8000),
     ...(body === undefined
       ? {}
       : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),

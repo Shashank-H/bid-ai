@@ -9,12 +9,15 @@ import { registerConversationRoutes } from './routes/conversations.js';
 import type { AgentService } from './agent/service.js';
 import { errorDiagnostics } from './observability/diagnostics.js';
 import type { DatasetMetadataProvider } from './domain/runtime-data.js';
+import type { Dashboard } from './domain/dashboard.js';
+import { registerAnalyticsRoutes } from './routes/analytics.js';
 
 export interface ProductDependencies {
   authorization: Authorization;
   cancelUser?: (userId: string) => void;
   agent?: AgentService;
   getMetadata?: DatasetMetadataProvider;
+  dashboard?: Dashboard;
 }
 
 export function buildApp(
@@ -52,6 +55,7 @@ export function buildApp(
 
     registerAuthRoutes(app, product.authorization, product.cancelUser, product.getMetadata);
     if (product.agent) registerConversationRoutes(app, product.authorization, product.agent);
+    if (product.dashboard) registerAnalyticsRoutes(app, product.authorization, product.dashboard);
   }
 
   app.setErrorHandler((error, request, reply) => {

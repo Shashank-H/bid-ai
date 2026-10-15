@@ -67,9 +67,9 @@ export function registerConversationRoutes(
         .code(200)
         .send({ duplicate: true, turnId: accepted.turn.id, status: accepted.turn.status });
 
+    // The investigation belongs to the saved conversation, not to this browser stream.
+    // Explicit cancellation, authorization expiry and service shutdown still abort it.
     const controller = new AbortController();
-    const disconnected = () => controller.abort('DISCONNECT');
-    reply.raw.on('close', disconnected);
     reply.hijack();
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -77,11 +77,14 @@ export function registerConversationRoutes(
       'X-Accel-Buffering': 'no',
     });
     const heartbeat = setInterval(() => {
-      if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n');
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.write(': heartbeat\n\n');
     }, 5000);
+    const disconnected = () => clearInterval(heartbeat);
+    reply.raw.on('close', disconnected);
     const emit = (event: StreamEvent) => {
       const payload = StreamEventSchema.parse(event);
-      if (!reply.raw.destroyed) reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+      if (!reply.raw.destroyed && !reply.raw.writableEnded)
+        reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
     };
 
     try {
@@ -89,7 +92,7 @@ export function registerConversationRoutes(
     } finally {
       clearInterval(heartbeat);
       reply.raw.off('close', disconnected);
-      if (!reply.raw.destroyed) reply.raw.end();
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
     }
   }
 

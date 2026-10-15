@@ -10,3 +10,4 @@ export * from './protocol.js';
 
 export * from './analytics.js';
 export * from './conversation.js';
+export * from './dashboard.js';

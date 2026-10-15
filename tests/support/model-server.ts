@@ -45,7 +45,8 @@ export async function startModelServer(
       });
 
     if (question.includes('mock:slow')) {
-      chunk({ content: 'Waiting for the demo investigation…' });
+      // Provisional text belongs to the tool-planning round, not the final cited answer.
+      if (!currentTools.length) chunk({ content: 'Waiting for the demo investigation…' });
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, 10_000);
         response.once('close', () => {

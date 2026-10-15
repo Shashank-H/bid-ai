@@ -91,6 +91,31 @@ export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
             'investigation-tool',
           );
         }
+        if (result && !saved) {
+          const used = new Set(state.evidence.map((entry) => entry.evidenceId));
+          const mapping = new Map<string, string>();
+          let nextId = 1;
+
+          for (const entry of result.evidence) {
+            while (used.has(`e${nextId}`)) nextId++;
+            const id = `e${nextId++}`;
+            used.add(id);
+            mapping.set(entry.evidenceId, id);
+          }
+
+          result = {
+            ...result,
+            evidence: result.evidence.map((entry) => ({
+              ...entry,
+              evidenceId: mapping.get(entry.evidenceId)!,
+            })),
+            findings: result.findings.map((finding) => ({
+              ...finding,
+              evidenceIds: finding.evidenceIds.map((id) => mapping.get(id)!),
+            })),
+          };
+        }
+
         if (result) deps.emit({ ...fields, type: 'tool-result', toolCallId: call.id, result });
         else if (error) deps.emit({ ...fields, type: 'tool-error', toolCallId: call.id, error });
       } catch (cause) {

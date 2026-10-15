@@ -32,11 +32,28 @@ async function login(page: Page, letter: 'a' | 'b') {
     (existingDemo ? '' : `isolated-browser-password-${letter}`);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await expect(page.getByLabel('Applied dashboard filters')).toBeVisible();
+  await page.getByRole('button', { name: 'Open agent', exact: true }).click();
   await expect(page.getByLabel('Message Bid Intelligence')).toBeVisible();
 }
 
+async function restoreConversation(page: Page, id: string) {
+  const response = await page.request.get('/api/conversations');
+  const { conversations } = (await response.json()) as { conversations: { id: string }[] };
+  const index = conversations.findIndex((item) => item.id === id);
+  expect(index).toBeGreaterThanOrEqual(0);
+  await page.getByRole('button', { name: 'Chat history', exact: true }).click();
+  const items = page
+    .getByRole('navigation', { name: 'Chat history', exact: true })
+    .locator('.history-item');
+  await expect(items).toHaveCount(conversations.length);
+  await items.nth(index).click();
+  await expect(page).toHaveURL(new RegExp(`conversation=${id}`));
+  await expect(page.getByText('Loading chat…', { exact: true })).toHaveCount(0);
+}
+
 async function investigate(page: Page, question: string): Promise<SavedTurn> {
-  await page.getByRole('button', { name: 'New', exact: true }).click();
+  await page.getByRole('button', { name: 'New chat', exact: true }).click();
   await page.getByLabel('Message Bid Intelligence').fill(question);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(async () => (await conversation(page))?.turns.at(-1)?.status).toBe('completed');
@@ -66,13 +83,10 @@ test('persisted floor investigation has real numeric evidence, exact coverage, r
   expect(metadata.observedThrough).toBe('2026-10-19T03:30:00.000Z');
   expect(metadata.partialDates).toEqual(['2026-08-24', '2026-10-19']);
   expect(metadata.lastCompleteDate).toBe('2026-10-18');
-  const dataContext = page.getByText('Data context', { exact: true });
-  await dataContext.click();
-  await expect(page.locator('.data-context')).toContainText('2026-08-24 to 2026-10-19 UTC');
-  await expect(page.locator('.data-context')).toContainText(
-    'Partial UTC dates: 2026-08-24, 2026-10-19',
-  );
-  await expect(page.locator('.data-context')).toContainText('Synthetic demo data');
+  const applied = page.getByLabel('Applied dashboard filters');
+  await expect(applied).toContainText('2026-10-12 – 2026-10-18 UTC');
+  const initialFilters = (await applied.textContent())!;
+  await expect(page.locator('.dashboard-data-note')).toContainText('Synthetic observations');
 
   const turn = await investigate(
     page,
@@ -107,17 +121,34 @@ test('persisted floor investigation has real numeric evidence, exact coverage, r
   await expect(page.locator('.assistant-message .message-text')).toContainText(
     `floor changed from $${change.before.floorCpm.toFixed(2)} to $${change.after.floorCpm.toFixed(2)}`,
   );
-  await expect(page.locator('.activity-panel .tool-card')).toHaveCount(3);
+  await expect(page.locator('.tool-diagnostics')).toHaveCount(3);
+  await expect(applied).toHaveText(initialFilters);
   await page
     .getByRole('link')
     .filter({ hasText: comparison.evidence[0]!.evidenceId })
     .first()
     .click();
-  await expect(page.locator('.evidence[open]').first()).toContainText('Synthetic observations');
+  const comparisonCard = page.locator('.evidence-card').filter({
+    has: page.getByRole('heading', { name: 'Estimated revenue comparison', exact: true }),
+  });
+  await expect(comparisonCard).toBeFocused();
+  await expect(applied).toHaveText(initialFilters);
+  await comparisonCard.getByRole('button', { name: 'Show in dashboard', exact: true }).click();
+  await expect(applied).toContainText('2026-09-14 – 2026-09-20 UTC');
+  await expect(applied).toContainText('vs 2026-09-07 – 2026-09-13 UTC');
+  await expect(page.locator('.matching-records')).toContainText(
+    '14 daily publisher metric records',
+  );
+  await expect(page.locator('.metric-tile').first()).toContainText(
+    data.current.estimatedRevenue.toFixed(2),
+  );
   const savedUrl = page.url();
   const id = new URLSearchParams(new URL(savedUrl).hash.slice(1)).get('conversation')!;
   await page.reload();
-  await expect(page.locator('.activity-panel .tool-card')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Open agent', exact: true }).click();
+  await expect(page.locator('.messages .turn')).toHaveCount(0);
+  await restoreConversation(page, id);
+  await expect(page.locator('.tool-diagnostics')).toHaveCount(3);
   expect((await conversation(page))!.turns.at(-1)!.text).toBe(turn.text);
   expect(await page.content()).not.toMatch(
     /PRIVATE_|SCENARIO_MANIFEST|BROWSER_MODEL_KEY_SENTINEL|credentialHash/,
@@ -137,9 +168,9 @@ test('persisted floor investigation has real numeric evidence, exact coverage, r
     expect(foreign.status()).toBe(404);
     expect(await foreign.text()).not.toContain(turn.text);
     await publisherB.goto(savedUrl);
-    await publisherB.reload();
-    await expect(publisherB.getByRole('alert')).toContainText('not found');
-    await expect(publisherB.locator('.tool-card')).toHaveCount(0);
+    await publisherB.getByRole('button', { name: 'Open agent', exact: true }).click();
+    await expect(publisherB.locator('.messages .turn')).toHaveCount(0);
+    await expect(publisherB.locator('.evidence-card')).toHaveCount(0);
   } finally {
     await other.close();
   }
@@ -150,8 +181,8 @@ test('persisted bidder investigation cites explicit period aggregates on a narro
 }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await login(page, 'b');
-  // New is inside the collapsed mobile history disclosure.
-  await page.locator('.history-panel > summary').click();
+  const applied = page.getByLabel('Applied dashboard filters');
+  const initialFilters = (await applied.textContent())!;
   const turn = await investigate(
     page,
     'Investigate Beacon bidder latency for October 5–18 against September 28–October 4.',
@@ -173,11 +204,29 @@ test('persisted bidder investigation cites explicit period aggregates on a narro
     'Beacon late-offer share changed',
   );
   await page.getByRole('link').filter({ hasText: beacon.evidenceId }).first().click();
-  const disclosure = page.locator('.evidence[open]').filter({ hasText: beacon.evidenceId });
-  await expect(disclosure).toContainText('Aggregate');
-  await expect(disclosure).toContainText('2026-10-05 to 2026-10-18');
-  await expect(disclosure).toContainText('beacon');
-  await expect(disclosure).toContainText('not verified paid revenue');
+  const card = page
+    .locator('.evidence-card')
+    .filter({ has: page.getByRole('heading', { name: 'beacon performance', exact: true }) })
+    .filter({ hasText: '2026-10-05 – 2026-10-18 UTC' });
+  await expect(card).toBeFocused();
+  await expect(card).toContainText('2026-10-05 – 2026-10-18 UTC');
+  await expect(card).toContainText('Bidders: beacon');
+  await expect(applied).toHaveText(initialFilters);
+  expect(beacon.analytics?.view).toEqual({
+    kind: 'bidder-performance',
+    metric: 'estimatedRevenue',
+    period: { startDate: '2026-10-05', endDate: '2026-10-18' },
+    bidderIds: ['beacon'],
+  });
+  await card.getByRole('button', { name: 'Show in dashboard', exact: true }).click();
+  await expect(page.getByLabel('Message Bid Intelligence')).toHaveCount(0);
+  await expect(applied).toContainText('2026-10-05 – 2026-10-18 UTC');
+  await expect(applied).toContainText('beacon');
+  await expect(page.locator('.matching-records')).toContainText('14 daily bidder metric records');
+  await expect(page.locator('.matching-records tbody tr')).toHaveCount(14);
+  await expect(page.locator('.matching-records tbody tr td:nth-child(2)')).toHaveText(
+    Array(14).fill('beacon'),
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   const screenshot = testInfo.outputPath('phase3-bidder-mobile.png');
   await page.screenshot({ path: screenshot, fullPage: true });
