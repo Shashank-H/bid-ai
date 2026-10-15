@@ -1,7 +1,8 @@
 import type { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import type { PublisherDatasetMetadata } from '@bid/shared';
 import { PublisherDataRepository } from '../db/publisher-data.js';
-import { fixtureMetadata } from '../fixtures/publishers.js';
+import { fixtureMetadata, fixtureAnalytics } from '../fixtures/publishers.js';
+import { Dashboard } from './dashboard.js';
 import { createReadOnlyTools } from '../tools/registry.js';
 import { createToolDispatcher, dispatchTool } from '../tools/dispatch.js';
 import type { ToolDispatcher } from '../tools/dispatch.js';
@@ -12,6 +13,7 @@ export type DatasetMetadataProvider = DatasetRepository['getPublicMetadata'];
 export interface RuntimeDataDependencies {
   dispatchTool: ToolDispatcher;
   getMetadata: DatasetMetadataProvider;
+  dashboard: Dashboard;
 }
 
 export async function fixtureDatasetMetadata(
@@ -33,12 +35,14 @@ export function createRuntimeData(
 
     return {
       dispatchTool: createToolDispatcher(tools),
+      dashboard: new Dashboard(repository),
       getMetadata: (context) => repository.getPublicMetadata(context),
     };
   }
 
   return {
     dispatchTool,
+    dashboard: new Dashboard(fixtureAnalytics),
     getMetadata: fixtureDatasetMetadata,
   };
 }

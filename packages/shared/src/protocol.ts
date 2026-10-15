@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { IdSchema, PeriodInputSchema, TimestampSchema } from './common.js';
 import { ConfigurationSettingsSchema } from './configuration.js';
 import { ToolDataSchema } from './analytics.js';
+import { AnalyticsEvidenceSchema } from './dashboard.js';
 
 export const EvidenceReferenceSchema = z
   .strictObject({
@@ -14,6 +15,7 @@ export const EvidenceReferenceSchema = z
     referenceType: z.enum(['record', 'period-aggregate']).optional(),
     period: PeriodInputSchema.optional(),
     bidderId: IdSchema.optional(),
+    analytics: AnalyticsEvidenceSchema.optional(),
   })
   .refine(
     (reference) =>

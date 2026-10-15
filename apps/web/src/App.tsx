@@ -3,7 +3,7 @@ import { AuthResponseSchema, LogoutResponseSchema } from '@bid/shared';
 import type { AuthResponse } from '@bid/shared';
 import { api, ApiError } from './api.js';
 import { Login } from './Login.js';
-import { Chat } from './Chat.js';
+import { Workspace } from './Workspace.js';
 
 export function App() {
   const [auth, setAuth] = useState<AuthResponse | null>(null);
@@ -105,7 +105,7 @@ export function App() {
             </section>
           )}
           {auth ? (
-            <Chat
+            <Workspace
               key={`${auth.user.userId}:${auth.publisherId}`}
               auth={auth}
               onUnauthorized={clearAuth}
