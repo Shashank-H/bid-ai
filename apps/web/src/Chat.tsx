@@ -48,10 +48,14 @@ export function Chat({
   auth,
   onUnauthorized,
   onLogout,
+  darkTheme,
+  onToggleTheme,
 }: {
   auth: AuthResponse;
   onUnauthorized: () => void;
   onLogout: () => void;
+  darkTheme: boolean;
+  onToggleTheme: () => void;
 }) {
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -472,6 +476,16 @@ export function Chat({
           <div className="account">
             <span className="account-login">{auth.user.login}</span>
             <span className="hint">{auth.publisherId}</span>
+            <button
+              type="button"
+              className="text-button theme-account-toggle"
+              aria-label={`Switch to ${darkTheme ? 'light' : 'dark'} theme`}
+              aria-pressed={darkTheme}
+              onClick={onToggleTheme}
+            >
+              <span aria-hidden="true">{darkTheme ? '☀' : '☾'}</span>
+              <span className="nav-label">{darkTheme ? 'Light theme' : 'Dark theme'}</span>
+            </button>
             <button
               type="button"
               className="text-button"
