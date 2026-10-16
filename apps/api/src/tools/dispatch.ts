@@ -26,8 +26,13 @@ export async function dispatchTool(
 
   const tool = tools.find((entry) => entry.name === name);
 
-  if (!tool || Buffer.byteLength(argumentsJson) > 16_384)
-    throw new HttpError(400, 'INVALID_INPUT', 'Unknown tool or oversized arguments.');
+  if (!tool) throw new HttpError(400, 'INVALID_INPUT', 'Unknown tool.');
+  if (Buffer.byteLength(argumentsJson) > 16_384)
+    throw new HttpError(
+      400,
+      'INVALID_INPUT',
+      'Tool arguments exceed 16 KiB. Use the configuration editor for larger documents.',
+    );
 
   let input: unknown;
 
@@ -43,11 +48,18 @@ export async function dispatchTool(
   const result = await tool.execute(input, context);
   const parsed = tool.outputSchema.safeParse(result.data);
 
+  if (Buffer.byteLength(JSON.stringify(result.data)) > tool.maxOutputBytes) {
+    throw new HttpError(
+      502,
+      'TOOL_FAILED',
+      'Tool result exceeds its byte limit. Request a smaller version page or inspect the full configuration in the editor.',
+    );
+  }
+
   if (
     !parsed.success ||
     !parsed.data.data ||
-    parsed.data.evidence.some((entry) => entry.publisherId !== context.identity.publisherId) ||
-    Buffer.byteLength(JSON.stringify(parsed.data)) > tool.maxOutputBytes
+    parsed.data.evidence.some((entry) => entry.publisherId !== context.identity.publisherId)
   ) {
     throw new HttpError(502, 'TOOL_FAILED', 'Tool output failed validation.');
   }

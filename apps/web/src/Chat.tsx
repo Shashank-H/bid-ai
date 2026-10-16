@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
-import { ConversationDetailSchema, ConversationListSchema, ConversationSchema } from '@bid/shared';
+import {
+  configurationTargetPath,
+  ConversationDetailSchema,
+  ConversationListSchema,
+  ConversationSchema,
+} from '@bid/shared';
 import type { Conversation, DashboardView, SavedTurn, StreamEvent } from '@bid/shared';
 import { api, ApiError, requestId as newRequestId, streamTurn } from './api.js';
 import { AgentActivity, CitedAnswer, ToolResults } from './ToolResults.js';
@@ -12,11 +17,13 @@ export function Chat({
   onClose,
   onConversationChange,
   onShowEvidence,
+  onNavigateConfiguration,
 }: {
   onUnauthorized: () => void;
   onClose: () => void;
   onConversationChange?: () => void;
   onShowEvidence?: (view: DashboardView, title: string) => void;
+  onNavigateConfiguration?: (path: string) => void;
 }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -49,7 +56,11 @@ export function Chat({
 
   useEffect(() => {
     mounted.current = true;
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      window.location.pathname + window.location.search + window.location.hash,
+    );
 
     return () => {
       mounted.current = false;
@@ -131,7 +142,7 @@ export function Chat({
 
   useEffect(() => {
     if (!selected) return;
-    window.history.replaceState(null, '', `#conversation=${selected}`);
+    window.history.replaceState(window.history.state, '', `#conversation=${selected}`);
     if (createdConversation.current === selected) {
       createdConversation.current = null;
       return;
@@ -183,7 +194,11 @@ export function Chat({
     setLoading(false);
     setHistoryOpen(false);
     onConversationChange?.();
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      window.location.pathname + window.location.search,
+    );
     question.current?.focus();
   }
 
@@ -203,6 +218,9 @@ export function Chat({
   }
 
   function streamEvent(event: StreamEvent) {
+    if (event.type === 'configuration-navigation') {
+      onNavigateConfiguration?.(configurationTargetPath(event.target));
+    }
     if (event.type === 'turn-start' && active.current) {
       active.current.turnId = event.turnId;
       if (pendingRequest.current) setMessage('');
@@ -571,6 +589,8 @@ export function Chat({
                     turnId={turn.id}
                     tools={turn.tools}
                     onShowEvidence={onShowEvidence}
+                    onNavigateConfiguration={onNavigateConfiguration}
+                    onUnauthorized={onUnauthorized}
                   />
                 )}
               </div>

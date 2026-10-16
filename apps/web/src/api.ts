@@ -39,9 +39,10 @@ export async function api<T>(
   schema: { parse(value: unknown): T },
   body?: unknown,
   signal?: AbortSignal,
+  method?: 'POST' | 'PUT',
 ): Promise<T> {
   const response = await fetch(path, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: body === undefined ? 'GET' : (method ?? 'POST'),
     credentials: 'same-origin',
     cache: 'no-store',
     signal: signal

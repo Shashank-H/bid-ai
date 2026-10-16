@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { AuthResponse, DashboardView } from '@bid/shared';
 import { Chat } from './Chat.js';
 import { Dashboard } from './Dashboard.js';
 import { Icon } from './Icon.js';
+import { Configurations, configurationRoute } from './Configurations.js';
 import './workspace.css';
 
 export function defaultDashboardView(auth: AuthResponse): DashboardView | null {
@@ -52,6 +53,86 @@ export function Workspace({
   const [agentOpen, setAgentOpen] = useState(false);
   const [view, setView] = useState<DashboardView | null>(() => defaultDashboardView(auth));
   const [evidenceTitle, setEvidenceTitle] = useState<string | null>(null);
+  const [pathname, setPathname] = useState(window.location.pathname);
+  const currentPath = useRef(window.location.pathname);
+  const historyIndex = useRef<number>(
+    Number.isInteger(window.history.state?.workspaceIndex)
+      ? window.history.state.workspaceIndex
+      : 0,
+  );
+  const restoringHistory = useRef(false);
+  const unsaved = useRef(false);
+  const configRoute = configurationRoute(pathname);
+  const isConfiguration = pathname.startsWith('/configurations');
+  const onDirtyChange = useCallback((dirty: boolean) => {
+    unsaved.current = dirty;
+  }, []);
+
+  function allowNavigation() {
+    return (
+      !unsaved.current ||
+      window.confirm(
+        'Discard your unsaved configuration edits? The shared saved draft will not be changed.',
+      )
+    );
+  }
+  function moveTo(path: string) {
+    if (restoringHistory.current) return false;
+    if (path === currentPath.current) return true;
+    if (!allowNavigation()) return false;
+    unsaved.current = false;
+    historyIndex.current += 1;
+    window.history.pushState(
+      { ...window.history.state, workspaceIndex: historyIndex.current },
+      '',
+      path + window.location.search + window.location.hash,
+    );
+    currentPath.current = path;
+    setPathname(path);
+    setEvidenceTitle(null);
+    return true;
+  }
+  function navigateConfiguration(path: string) {
+    if (configurationRoute(path)) moveTo(path);
+  }
+
+  useEffect(() => {
+    window.history.replaceState(
+      { ...window.history.state, workspaceIndex: historyIndex.current },
+      '',
+    );
+    function pop(event: PopStateEvent) {
+      if (restoringHistory.current) {
+        restoringHistory.current = false;
+        return;
+      }
+      const targetIndex = Number.isInteger(event.state?.workspaceIndex)
+        ? (event.state.workspaceIndex as number)
+        : historyIndex.current - 1;
+      if (window.location.pathname !== currentPath.current && !allowNavigation()) {
+        restoringHistory.current = true;
+        window.history.go(historyIndex.current - targetIndex);
+        return;
+      }
+      historyIndex.current = targetIndex;
+      if (window.location.pathname === currentPath.current) return;
+      unsaved.current = false;
+      currentPath.current = window.location.pathname;
+      setPathname(window.location.pathname);
+      setEvidenceTitle(null);
+    }
+    function leaving(event: BeforeUnloadEvent) {
+      if (!unsaved.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('popstate', pop);
+    window.addEventListener('beforeunload', leaving);
+    return () => {
+      window.removeEventListener('popstate', pop);
+      window.removeEventListener('beforeunload', leaving);
+    };
+  }, []);
   const [agentWidth, setAgentWidth] = useState(() =>
     panelWidth(Math.round(window.innerWidth * 0.3)),
   );
@@ -65,18 +146,23 @@ export function Workspace({
   }, []);
 
   function applyView(next: DashboardView) {
+    if (!moveTo('/')) return;
     setEvidenceTitle(null);
     setView(next);
   }
 
   function showEvidence(next: DashboardView, title: string) {
+    if (!moveTo('/')) return;
     setView(next);
     setEvidenceTitle(title);
     if (window.matchMedia('(max-width: 1000px)').matches) setAgentOpen(false);
   }
 
   function navigate(kind: DashboardView['kind']) {
-    if (!view) return;
+    if (!view) {
+      moveTo('/');
+      return;
+    }
     applyView(
       kind === 'publisher-performance'
         ? { kind, metric: 'estimatedRevenue', period: view.period }
@@ -97,7 +183,9 @@ export function Workspace({
           className="rail-button secondary"
           aria-label="Publisher performance"
           title="Publisher performance"
-          aria-current={view?.kind === 'publisher-performance' ? 'page' : undefined}
+          aria-current={
+            !isConfiguration && view?.kind === 'publisher-performance' ? 'page' : undefined
+          }
           onClick={() => navigate('publisher-performance')}
         >
           <Icon name="chart" />
@@ -107,11 +195,23 @@ export function Workspace({
           className="rail-button secondary"
           aria-label="Bidder performance"
           title="Bidder performance"
-          aria-current={view?.kind === 'bidder-performance' ? 'page' : undefined}
+          aria-current={
+            !isConfiguration && view?.kind === 'bidder-performance' ? 'page' : undefined
+          }
           onClick={() => navigate('bidder-performance')}
         >
           <Icon name="compare" />
           <span>Bidders</span>
+        </button>
+        <button
+          className="rail-button secondary"
+          aria-label="Configurations"
+          title="Configurations"
+          aria-current={isConfiguration ? 'page' : undefined}
+          onClick={() => navigateConfiguration('/configurations')}
+        >
+          <Icon name="settings" />
+          <span>Config</span>
         </button>
         <div className="rail-bottom">
           <button
@@ -127,21 +227,34 @@ export function Workspace({
             className="rail-button secondary"
             aria-label="Log out"
             title={`Log out ${auth.user.login}`}
-            onClick={onLogout}
+            onClick={() => {
+              if (allowNavigation()) onLogout();
+            }}
           >
             <Icon name="logout" />
             <span>Log out</span>
           </button>
         </div>
       </nav>
-      <section className="dashboard-main" aria-label="Analytics dashboard">
+      <section
+        className="dashboard-main"
+        aria-label={isConfiguration ? 'Configuration management' : 'Analytics dashboard'}
+      >
         <header className="workspace-header">
           <div>
             <p className="workspace-eyebrow">
-              {auth.publisherId} <span> / Analytics</span>
+              {auth.publisherId} <span> / {isConfiguration ? 'Configuration' : 'Analytics'}</span>
             </p>
             <h1>
-              {view?.kind === 'bidder-performance' ? 'Bidder performance' : 'Performance overview'}
+              {isConfiguration
+                ? configRoute?.kind === 'draft'
+                  ? 'Edit configuration'
+                  : configRoute?.kind === 'version'
+                    ? 'Configuration version'
+                    : 'Configurations'
+                : view?.kind === 'bidder-performance'
+                  ? 'Bidder performance'
+                  : 'Performance overview'}
             </h1>
           </div>
         </header>
@@ -157,12 +270,26 @@ export function Workspace({
               </button>
             </div>
           )}
-          <Dashboard
-            auth={auth}
-            view={view}
-            onViewChange={applyView}
-            onUnauthorized={onUnauthorized}
-          />
+          {configRoute ? (
+            <Configurations
+              route={configRoute}
+              auth={auth}
+              onNavigate={navigateConfiguration}
+              onUnauthorized={onUnauthorized}
+              onDirtyChange={onDirtyChange}
+            />
+          ) : isConfiguration ? (
+            <p role="alert" className="error">
+              Configuration page not found.
+            </p>
+          ) : (
+            <Dashboard
+              auth={auth}
+              view={view}
+              onViewChange={applyView}
+              onUnauthorized={onUnauthorized}
+            />
+          )}
         </div>
       </section>
       {!agentOpen && (
@@ -235,6 +362,7 @@ export function Workspace({
             }}
             onConversationChange={() => setEvidenceTitle(null)}
             onShowEvidence={showEvidence}
+            onNavigateConfiguration={navigateConfiguration}
           />
         </aside>
       )}

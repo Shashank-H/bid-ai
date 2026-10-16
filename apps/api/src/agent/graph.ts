@@ -28,6 +28,7 @@ export interface GraphDependencies {
   emit: (event: StreamEvent) => void;
   conversationId: string;
   turnId: string;
+  allowConfigurationNavigation?: boolean;
 }
 
 export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
@@ -87,7 +88,17 @@ export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
           await deps.reserve('tool');
           result = await deps.tracing.tool(
             { name: call.name, argumentsJson: call.argumentsJson },
-            () => deps.dispatchTool(call.name, call.argumentsJson, deps.context),
+            () =>
+              deps.dispatchTool(call.name, call.argumentsJson, {
+                ...deps.context,
+                invocation: {
+                  conversationId: deps.conversationId,
+                  turnId: deps.turnId,
+                  toolCallId: call.id,
+                  evidence: state.evidence,
+                  allowNavigation: deps.allowConfigurationNavigation === true,
+                },
+              }),
             'investigation-tool',
           );
         }
@@ -116,6 +127,13 @@ export function buildAgentGraph(saver: PostgresSaver, deps: GraphDependencies) {
           };
         }
 
+        if (
+          result?.data?.kind === 'configuration-navigation' &&
+          !saved &&
+          deps.allowConfigurationNavigation
+        ) {
+          deps.emit({ ...fields, type: 'configuration-navigation', target: result.data.target });
+        }
         if (result) deps.emit({ ...fields, type: 'tool-result', toolCallId: call.id, result });
         else if (error) deps.emit({ ...fields, type: 'tool-error', toolCallId: call.id, error });
       } catch (cause) {

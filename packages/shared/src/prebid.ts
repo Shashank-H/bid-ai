@@ -10,6 +10,30 @@ export const BannerSizeSchema = z.tuple([
 const TimeoutSchema = z.number().int().min(100).max(10_000);
 const uniqueIds = (ids: readonly string[]) => new Set(ids).size === ids.length;
 
+const LegacyFloorDataSchema = z.strictObject({
+  currency: z.literal('USD'),
+  schema: z.strictObject({
+    fields: z.tuple([z.literal('mediaType')]),
+    delimiter: z.literal('|'),
+  }),
+  values: z.strictObject({ banner: AmountSchema.max(100) }),
+  default: AmountSchema.max(100),
+});
+const SlotFloorDataSchema = z.strictObject({
+  currency: z.literal('USD'),
+  schema: z.strictObject({
+    fields: z.tuple([z.literal('adUnitCode'), z.literal('mediaType')]),
+    delimiter: z.literal('|'),
+  }),
+  values: z
+    .record(z.string().min(1).max(135), AmountSchema.max(100))
+    .refine((values) => Object.hasOwn(values, '*|banner') && Object.keys(values).length <= 11, {
+      message: 'Slot floor rules require one global banner rule and at most ten overrides',
+    }),
+  default: AmountSchema.max(100),
+});
+export const PrebidFloorDataSchema = z.union([LegacyFloorDataSchema, SlotFloorDataSchema]);
+
 // A bounded, declarative banner profile, not an arbitrary pbjs.setConfig parser.
 // Functions, live SSP credentials, optional modules and mixed currencies are excluded.
 export const PrebidConfigurationSchema = z
@@ -49,15 +73,7 @@ export const PrebidConfigurationSchema = z
           floorDeals: z.literal(false),
           bidAdjustment: z.boolean(),
         }),
-        data: z.strictObject({
-          currency: z.literal('USD'),
-          schema: z.strictObject({
-            fields: z.tuple([z.literal('mediaType')]),
-            delimiter: z.literal('|'),
-          }),
-          values: z.strictObject({ banner: AmountSchema.max(100) }),
-          default: AmountSchema.max(100),
-        }),
+        data: PrebidFloorDataSchema,
       }),
     }),
     adUnits: z
@@ -112,6 +128,29 @@ export const PrebidConfigurationSchema = z
         ),
       ),
     { message: 'Every configured bidder must have a registered mock adapter specification' },
+  )
+  .refine(
+    (profile) => {
+      const data = profile.setConfig.floors.data;
+
+      if (!hasSlotFloorRules(data)) return true;
+
+      const codes = new Set(profile.adUnits.map((unit) => unit.code));
+
+      return (
+        [...codes].every((code) => !code.includes('*') && !code.includes('|')) &&
+        Object.keys(data.values).every(
+          (rule) =>
+            rule === '*|banner' ||
+            (rule.endsWith('|banner') && codes.has(rule.slice(0, -'|banner'.length))),
+        )
+      );
+    },
+    {
+      message:
+        'Slot floor rules must reference configured ad units; slot codes cannot contain * or |',
+      path: ['setConfig', 'floors', 'data', 'values'],
+    },
   );
 
 export const ConfigurationParameterImpactSchema = z.strictObject({
@@ -127,3 +166,93 @@ export type BannerSize = z.infer<typeof BannerSizeSchema>;
 export type MockBidderId = z.infer<typeof MockBidderIdSchema>;
 export type PrebidConfiguration = z.infer<typeof PrebidConfigurationSchema>;
 export type ConfigurationParameterImpact = z.infer<typeof ConfigurationParameterImpactSchema>;
+type FloorData = z.infer<typeof PrebidFloorDataSchema>;
+type SlotFloorData = z.infer<typeof SlotFloorDataSchema>;
+
+function hasSlotFloorRules(data: FloorData): data is SlotFloorData {
+  return data.schema.fields[0] === 'adUnitCode';
+}
+
+export function getGlobalBannerFloor(profile: PrebidConfiguration): number {
+  const data = profile.setConfig.floors.data;
+
+  return hasSlotFloorRules(data) ? data.values['*|banner']! : data.values.banner;
+}
+
+export function getSlotFloorOverride(
+  profile: PrebidConfiguration,
+  code: string,
+): number | undefined {
+  const data = profile.setConfig.floors.data;
+
+  return hasSlotFloorRules(data) ? data.values[`${code}|banner`] : undefined;
+}
+
+export function getEffectiveBannerFloor(profile: PrebidConfiguration, code: string): number {
+  return getSlotFloorOverride(profile, code) ?? getGlobalBannerFloor(profile);
+}
+
+export function getBannerFloorRule(profile: PrebidConfiguration, code: string): string {
+  const data = profile.setConfig.floors.data;
+
+  if (!hasSlotFloorRules(data)) return 'banner';
+
+  return Object.hasOwn(data.values, `${code}|banner`) ? `${code}|banner` : '*|banner';
+}
+
+export function setGlobalBannerFloor(profile: PrebidConfiguration, value: number): void {
+  const data = profile.setConfig.floors.data;
+
+  if (hasSlotFloorRules(data)) data.values['*|banner'] = value;
+  else data.values.banner = value;
+}
+
+export function setSlotFloorOverride(
+  profile: PrebidConfiguration,
+  code: string,
+  value: number | undefined,
+): void {
+  const data = profile.setConfig.floors.data;
+  const rule = `${code}|banner`;
+
+  if (value !== undefined) {
+    if (hasSlotFloorRules(data)) data.values[rule] = value;
+    else
+      profile.setConfig.floors.data = {
+        currency: data.currency,
+        schema: { fields: ['adUnitCode', 'mediaType'], delimiter: '|' },
+        values: { '*|banner': data.values.banner, [rule]: value },
+        default: data.default,
+      };
+
+    return;
+  }
+
+  if (!hasSlotFloorRules(data)) return;
+
+  delete data.values[rule];
+
+  if (Object.keys(data.values).length === 1 && Object.hasOwn(data.values, '*|banner'))
+    profile.setConfig.floors.data = {
+      currency: data.currency,
+      schema: { fields: ['mediaType'], delimiter: '|' },
+      values: { banner: data.values['*|banner']! },
+      default: data.default,
+    };
+}
+
+export function renameSlotFloorOverride(
+  profile: PrebidConfiguration,
+  oldCode: string,
+  newCode: string,
+): void {
+  const data = profile.setConfig.floors.data;
+  const oldRule = `${oldCode}|banner`;
+  const newRule = `${newCode}|banner`;
+
+  if (oldCode === newCode || !hasSlotFloorRules(data) || !Object.hasOwn(data.values, oldRule))
+    return;
+
+  data.values[newRule] = data.values[oldRule]!;
+  delete data.values[oldRule];
+}

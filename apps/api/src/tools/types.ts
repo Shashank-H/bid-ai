@@ -9,12 +9,14 @@ export interface ToolExecutionResult<T> {
 
 // Concrete registry, schemas and dispatcher are Phase 1. Dispatch validates schemas,
 // supplies authorized context, enforces maxOutputBytes, and forwards cancellation.
-export interface ReadOnlyToolDefinition<Input, Output> {
+export interface ToolDefinition<Input, Output> {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: z.ZodType<Input>;
   readonly outputSchema: z.ZodType<Output>;
   readonly maxOutputBytes: number;
-  readonly readOnly: true;
+  readonly readOnly: boolean;
   execute(input: Input, context: ExecutionContext): Promise<ToolExecutionResult<Output>>;
 }
+
+export type ReadOnlyToolDefinition<Input, Output> = ToolDefinition<Input, Output>;

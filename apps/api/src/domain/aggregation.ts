@@ -6,6 +6,8 @@ import {
   DailyMetricsSchema,
   DateSchema,
   TimestampSchema,
+  getBannerFloorRule,
+  getEffectiveBannerFloor,
 } from '@bid/shared';
 import type {
   BidderMetrics,
@@ -367,9 +369,10 @@ function validateParsedAuction(
       'offer expiry mismatch',
     );
     const floors = profile.setConfig.floors;
-    const matchedFloor = floors.data.values.banner;
+    const matchedFloor = getEffectiveBannerFloor(profile, unit.code);
     check(
-      details.floorRule === 'banner' && toMicroCpm(details.floorCpm) === toMicroCpm(matchedFloor),
+      details.floorRule === getBannerFloorRule(profile, unit.code) &&
+        toMicroCpm(details.floorCpm) === toMicroCpm(matchedFloor),
       'matched floor mismatch',
     );
     check(

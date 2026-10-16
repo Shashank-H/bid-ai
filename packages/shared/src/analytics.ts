@@ -8,7 +8,11 @@ import {
   RatioSchema,
 } from './common.js';
 import { ConfigurationHistorySchema, ConfigurationSchema } from './configuration.js';
-import { ConfigurationParameterImpactSchema } from './prebid.js';
+import { ConfigurationParameterImpactSchema, PrebidConfigurationSchema } from './prebid.js';
+import {
+  ConfigurationPublicationSummarySchema,
+  ConfigurationTargetSchema,
+} from './configuration-tools.js';
 
 export const PerformanceSummarySchema = z.strictObject({
   period: PeriodInputSchema,
@@ -43,6 +47,45 @@ export const BidderSummarySchema = z.strictObject({
 });
 
 export const ToolDataSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('configuration-document'),
+    target: ConfigurationTargetSchema,
+    revision: z.number().int().nonnegative(),
+    currentVersionId: z.iso.datetime().nullable(),
+    prebid: PrebidConfigurationSchema.nullable(),
+    authorUserId: IdSchema.optional(),
+    coauthor: z.literal('agent').optional(),
+  }),
+  z.strictObject({
+    kind: z.literal('configuration-version-list'),
+    versions: z.array(ConfigurationPublicationSummarySchema).max(25),
+    nextCursor: z.string().max(1000).nullable(),
+  }),
+  z.strictObject({
+    kind: z.literal('configuration-comparison'),
+    left: ConfigurationTargetSchema,
+    right: ConfigurationTargetSchema,
+    changes: z
+      .array(
+        z.strictObject({
+          path: z.string().max(500),
+          beforeJson: z.string().max(24_576),
+          afterJson: z.string().max(24_576),
+        }),
+      )
+      .max(2000),
+  }),
+  z.strictObject({
+    kind: z.literal('configuration-draft-proposal'),
+    proposalId: IdSchema,
+    status: z.enum(['pending', 'approved', 'rejected', 'superseded']),
+    revision: z.number().int().nonnegative(),
+    target: ConfigurationTargetSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('configuration-navigation'),
+    target: ConfigurationTargetSchema,
+  }),
   z.strictObject({ kind: z.literal('performance-summary'), metrics: PerformanceSummarySchema }),
   z.strictObject({
     kind: z.literal('period-comparison'),
