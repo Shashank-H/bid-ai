@@ -166,6 +166,12 @@ export class AgentService {
         guard,
         conversationId: conversation.id,
         turnId: turn.id,
+        // Never replay a page switch during checkpoint resume, and require explicit navigation wording.
+        allowConfigurationNavigation:
+          !resume &&
+          /\b(open|show|navigate|go to|take me)\b[\s\S]*\b(configurations?|config|draft|versions?|settings)\b/i.test(
+            turn.input,
+          ),
         reserve: (kind) =>
           this.conversations.reserveAttempt(identity, conversation.id, turn.id, generation, kind),
         emit,

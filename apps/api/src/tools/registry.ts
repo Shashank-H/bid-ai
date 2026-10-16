@@ -78,11 +78,15 @@ export function createReadOnlyTools(
 
 // Explicit fixture defaults preserve isolated callers; serving startup injects its own registry.
 export const readOnlyTools = createReadOnlyTools(fixtureAnalytics, fixtureConfiguration);
-export const modelTools = readOnlyTools.map((tool) => ({
-  type: 'function' as const,
-  function: {
-    name: tool.name,
-    description: tool.description,
-    parameters: z.toJSONSchema(tool.inputSchema, { target: 'draft-7' }),
-  },
-}));
+export function toolsForModel(tools: readonly ReadOnlyTool[]) {
+  return tools.map((tool) => ({
+    type: 'function' as const,
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: z.toJSONSchema(tool.inputSchema, { target: 'draft-7' }),
+    },
+  }));
+}
+
+export const modelTools = toolsForModel(readOnlyTools);

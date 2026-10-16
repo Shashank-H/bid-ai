@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CurrencySchema, IdSchema, TimestampSchema } from './common.js';
-import { PrebidConfigurationSchema } from './prebid.js';
+import { getGlobalBannerFloor, PrebidConfigurationSchema } from './prebid.js';
 import type { PrebidConfiguration } from './prebid.js';
 
 export const ConfigurationSettingsSchema = z.strictObject({
@@ -46,7 +46,7 @@ export const ConfigurationHistorySchema = z
 
 export function summarizePrebidConfiguration(prebid: PrebidConfiguration) {
   return ConfigurationSettingsSchema.parse({
-    floorCpm: prebid.setConfig.floors.data.values.banner,
+    floorCpm: getGlobalBannerFloor(prebid),
     auctionTimeoutMs: prebid.requestBids.timeout ?? prebid.setConfig.bidderTimeout,
     enabledBidders: [
       ...new Set(prebid.adUnits.flatMap((unit) => unit.bids.map((bid) => bid.bidder))),

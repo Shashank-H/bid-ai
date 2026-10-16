@@ -30,7 +30,7 @@ try {
   const agent = new AgentService(
     conversations,
     authorization,
-    modelRunner(process.env, tracing),
+    modelRunner(process.env, tracing, runtimeData.modelTools),
     tracing,
     undefined,
     runtimeData,
@@ -46,6 +46,7 @@ try {
       agent,
       getMetadata: runtimeData.getMetadata,
       dashboard: runtimeData.dashboard,
+      configurations: runtimeData.configurations,
       cancelUser: (userId) => agent.cancelUser(userId),
     },
   );

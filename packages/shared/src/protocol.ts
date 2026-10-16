@@ -3,6 +3,7 @@ import { IdSchema, PeriodInputSchema, TimestampSchema } from './common.js';
 import { ConfigurationSettingsSchema } from './configuration.js';
 import { ToolDataSchema } from './analytics.js';
 import { AnalyticsEvidenceSchema } from './dashboard.js';
+import { ConfigurationTargetSchema } from './configuration-tools.js';
 
 export const EvidenceReferenceSchema = z
   .strictObject({
@@ -16,6 +17,7 @@ export const EvidenceReferenceSchema = z
     period: PeriodInputSchema.optional(),
     bidderId: IdSchema.optional(),
     analytics: AnalyticsEvidenceSchema.optional(),
+    configurationTarget: ConfigurationTargetSchema.optional(),
   })
   .refine(
     (reference) =>
@@ -82,6 +84,11 @@ const StreamFields = {
 export const StreamEventSchema = z.discriminatedUnion('type', [
   z.strictObject({ ...StreamFields, type: z.literal('turn-start') }),
   z.strictObject({ ...StreamFields, type: z.literal('text-reset') }),
+  z.strictObject({
+    ...StreamFields,
+    type: z.literal('configuration-navigation'),
+    target: ConfigurationTargetSchema,
+  }),
   z.strictObject({ ...StreamFields, type: z.literal('text-delta'), text: z.string().max(16_384) }),
   z.strictObject({
     ...StreamFields,

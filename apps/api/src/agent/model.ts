@@ -40,7 +40,11 @@ const Chunk = z.object({
     .max(1),
 });
 
-export function modelRunner(env: NodeJS.ProcessEnv, tracing: TracingRuntime): ModelRunner {
+export function modelRunner(
+  env: NodeJS.ProcessEnv,
+  tracing: TracingRuntime,
+  tools = modelTools,
+): ModelRunner {
   return async (state, signal, emit, context) => {
     const settings = readModelSettings(env);
     const agent = readAgentSettings(env);
@@ -74,7 +78,7 @@ Copy IDs verbatim. Do not add "evidenceId:" inside brackets, shorten an ID, or i
       reasoningEffort: settings.reasoningEffort,
       temperature: settings.temperature,
       messageCount: messages.length,
-      toolNames: modelTools.map((tool) => tool.function.name),
+      toolNames: tools.map((tool) => tool.function.name),
       chunks: 0,
       rawBytes: 0,
     };
@@ -100,7 +104,7 @@ Copy IDs verbatim. Do not add "evidenceId:" inside brackets, shorten an ID, or i
       stream: true as const,
       stream_options: { include_usage: true },
       messages,
-      tools: modelTools,
+      tools,
       ...completionLimit(settings.baseURL, agent.maxCompletionTokens),
       ...modelTuning(settings),
     };

@@ -113,6 +113,7 @@ const service = new AgentService(
       LLM_MODEL: 'e2e-model',
     },
     tracing,
+    runtime.modelTools,
   ),
   tracing,
   undefined,
@@ -124,6 +125,7 @@ const app = buildApp({ checkReady: () => conversations.assertReady() }, false, {
   cancelUser: (userId: string) => service.cancelUser(userId),
   getMetadata: runtime.getMetadata,
   dashboard: runtime.dashboard,
+  configurations: runtime.configurations,
 });
 let closing = false;
 

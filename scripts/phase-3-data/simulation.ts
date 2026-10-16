@@ -152,7 +152,7 @@ export function simulateAuction(input: AuctionInput): NormalizedAuctionEvent[] {
           ttlSeconds: 60,
           ttlBufferSeconds: resolved.ttlBufferSeconds,
           expiresAt: iso(arrival + (60 - resolved.ttlBufferSeconds) * 1000),
-          floorRule: 'banner',
+          floorRule: resolved.floorRule,
           floorCpm: resolved.floorCpm,
           floorCurrency: 'USD',
           signaledFloorCpm: activeFloor ? resolved.floorCpm : 0,

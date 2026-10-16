@@ -1,0 +1,264 @@
+.configurations {
+  max-width: 1200px;
+}
+.configuration-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.configuration-heading h2 {
+  margin-bottom: 6px;
+  font-size: 21px;
+}
+.configuration-heading .hint {
+  margin-bottom: 0;
+}
+.configuration-badge {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.configuration-current {
+  border: 1px solid var(--border);
+  padding: 24px;
+  background: var(--surface);
+}
+.configuration-current dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+.configuration-current dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.configuration-current dd {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+}
+.configuration-section {
+  margin-top: 32px;
+  border-top: 1px solid var(--border);
+  padding-top: 24px;
+}
+.configuration-section h2,
+.configuration-section h3 {
+  font-size: 18px;
+}
+.configuration-notice,
+.configuration-confirm {
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: var(--warm-surface);
+  margin: 20px 0;
+}
+.configuration-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+.configuration-tabs [aria-selected='true'] {
+  border-color: var(--accent);
+  background: var(--warm-surface);
+}
+.configuration-form {
+  display: grid;
+  gap: 20px;
+}
+.configuration-form fieldset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  margin: 0;
+  padding: 20px;
+}
+.configuration-form legend {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+.configuration-overrides {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.configuration-overrides summary {
+  cursor: pointer;
+  padding: 16px 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.configuration-overrides summary::marker {
+  color: var(--accent);
+}
+
+.configuration-overrides summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.configuration-override-status {
+  margin-left: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.configuration-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.configuration-fields label,
+.configuration-json-label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.configuration-fields input,
+.configuration-fields select,
+.configuration-json {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  background: var(--canvas);
+  color: var(--text);
+  font: inherit;
+  border-radius: 0;
+}
+.configuration-fields select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.configuration-size {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.configuration-size label {
+  min-width: 0;
+  flex: 1;
+}
+.configuration-checkboxes {
+  display: flex;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.configuration-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.configuration-checkboxes input {
+  accent-color: var(--accent);
+  width: 17px;
+  height: 17px;
+}
+.configuration-form fieldset .hint {
+  margin: 16px 0 0;
+}
+.configuration-json {
+  min-height: 440px;
+  resize: vertical;
+  font:
+    12px/1.7 ui-monospace,
+    monospace;
+  tab-size: 2;
+}
+.configuration-document,
+.configuration-confirm pre {
+  max-width: 100%;
+  max-height: 600px;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font:
+    12px/1.7 ui-monospace,
+    monospace;
+}
+.configuration-diff,
+.configuration-history {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+.configuration-diff table,
+.configuration-history table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+}
+.configuration-diff caption {
+  text-align: left;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.configuration-diff th,
+.configuration-diff td,
+.configuration-history th,
+.configuration-history td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.configuration-diff thead,
+.configuration-history thead {
+  background: var(--surface);
+}
+.configuration-diff code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.configuration-diff td {
+  min-width: 100px;
+  max-width: 300px;
+}
+.configuration-history .text-button {
+  padding: 0;
+  color: var(--link);
+  text-decoration: underline;
+  font-size: 12px;
+}
+.configuration-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0 12px;
+}
+.configuration-confirm details {
+  margin-top: 16px;
+}
+.configuration-version > .text-button {
+  margin-bottom: 20px;
+  padding-left: 0;
+}
+@media (max-width: 700px) {
+  .configuration-current {
+    padding: 16px;
+  }
+  .configuration-current dl,
+  .configuration-fields {
+    grid-template-columns: 1fr;
+  }
+  .configuration-heading {
+    gap: 12px;
+  }
+  .configuration-json {
+    min-height: 320px;
+  }
+  .configuration-form fieldset {
+    padding: 12px;
+  }
+}

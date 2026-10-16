@@ -3,6 +3,14 @@ import { createRequire } from 'node:module';
 import { afterAll, expect, it } from 'vitest';
 import {
   DatasetDescriptorSchema,
+  PrebidConfigurationSchema,
+  getBannerFloorRule,
+  getEffectiveBannerFloor,
+  getGlobalBannerFloor,
+  getSlotFloorOverride,
+  renameSlotFloorOverride,
+  setGlobalBannerFloor,
+  setSlotFloorOverride,
   compareAuctionEvents,
   expandAuctionRecord,
   groupAuctionRecords,
@@ -23,15 +31,21 @@ import {
   queryPublisherPages,
 } from '../../apps/api/src/db/publisher-data.js';
 import { PublisherDataWriter } from '../../apps/api/src/db/publisher-data-writes.js';
-import { aggregateDay, createEventHasher } from '../../apps/api/src/domain/aggregation.js';
+import {
+  aggregateDay,
+  canonicalJson,
+  createEventHasher,
+} from '../../apps/api/src/domain/aggregation.js';
+import { resolvePrebidAuction } from '../../apps/api/src/domain/prebid-configuration.js';
 import type { ExecutionContext } from '../../apps/api/src/domain/interfaces.js';
 import { reconcilePublisherData } from '../../apps/api/src/commands/data-reconcile.js';
 import {
   PUBLISHER_IDS,
   createTimeline,
+  createPrebidProfile,
   loadingDescriptor,
 } from '../../scripts/phase-3-data/configuration.js';
-import { generateDay } from '../../scripts/phase-3-data/simulation.js';
+import { generateDay, simulateAuction } from '../../scripts/phase-3-data/simulation.js';
 import { Dashboard } from '../../apps/api/src/domain/dashboard.js';
 import { Analytics } from '../../apps/api/src/domain/analytics.js';
 
@@ -126,6 +140,180 @@ afterAll(async () => {
     }
   } finally {
     client.destroy();
+  }
+});
+
+it('optional per-slot floors preserve legacy snapshots and use native package rule precedence', () => {
+  const profile = createPrebidProfile('publisher-a', 0.8, 1000);
+  const original = canonicalJson(profile);
+  const first = profile.adUnits[0]!.code;
+  const second = profile.adUnits[1]!.code;
+  const third = profile.adUnits[2]!.code;
+
+  expect(canonicalJson(PrebidConfigurationSchema.parse(profile))).toBe(original);
+  expect(getGlobalBannerFloor(profile)).toBe(0.8);
+  expect(getSlotFloorOverride(profile, first)).toBeUndefined();
+  expect(getEffectiveBannerFloor(profile, first)).toBe(0.8);
+  expect(getBannerFloorRule(profile, first)).toBe('banner');
+
+  const roundTrip = structuredClone(profile);
+  setSlotFloorOverride(roundTrip, first, 0);
+  setSlotFloorOverride(roundTrip, first, undefined);
+  expect(canonicalJson(roundTrip)).toBe(original);
+
+  setSlotFloorOverride(profile, first, 0);
+  setSlotFloorOverride(profile, second, 2);
+  expect(PrebidConfigurationSchema.parse(profile)).toEqual(profile);
+  expect(profile.setConfig.floors.data.schema.fields).toEqual(['adUnitCode', 'mediaType']);
+  expect(getGlobalBannerFloor(profile)).toBe(0.8);
+  expect(getEffectiveBannerFloor(profile, first)).toBe(0);
+  expect(getBannerFloorRule(profile, first)).toBe(`${first}|banner`);
+  expect(getEffectiveBannerFloor(profile, second)).toBe(2);
+  expect(getEffectiveBannerFloor(profile, third)).toBe(0.8);
+  expect(getBannerFloorRule(profile, third)).toBe('*|banner');
+  expect(resolvePrebidAuction(profile, first).floorCpm).toBe(0);
+
+  setGlobalBannerFloor(profile, 0.9);
+  expect(getEffectiveBannerFloor(profile, third)).toBe(0.9);
+  expect(getEffectiveBannerFloor(profile, first)).toBe(0);
+  renameSlotFloorOverride(profile, first, 'renamed-slot');
+  profile.adUnits[0]!.code = 'renamed-slot';
+  expect(getSlotFloorOverride(profile, first)).toBeUndefined();
+  expect(getSlotFloorOverride(profile, 'renamed-slot')).toBe(0);
+  expect(PrebidConfigurationSchema.safeParse(profile).success).toBe(true);
+
+  const defaultFloor = profile.setConfig.floors.data.default;
+  setSlotFloorOverride(profile, second, undefined);
+  setSlotFloorOverride(profile, 'renamed-slot', undefined);
+  expect(profile.setConfig.floors.data).toEqual({
+    currency: 'USD',
+    schema: { fields: ['mediaType'], delimiter: '|' },
+    values: { banner: 0.9 },
+    default: defaultFloor,
+  });
+  expect(PrebidConfigurationSchema.safeParse(profile).success).toBe(true);
+});
+
+it('optional per-slot floors reject invalid ranges, orphan rules and ambiguous slot identities', () => {
+  const legacy = createPrebidProfile('publisher-a', 0.8, 1000);
+  const first = legacy.adUnits[0]!.code;
+
+  for (const value of [-0.01, 100.01, Number.NaN]) {
+    const profile = structuredClone(legacy);
+    setSlotFloorOverride(profile, first, value);
+    expect(PrebidConfigurationSchema.safeParse(profile).success).toBe(false);
+  }
+
+  for (const code of ['*', 'with|separator', 'with*wildcard']) {
+    const profile = structuredClone(legacy);
+    profile.adUnits[0]!.code = code;
+    expect(PrebidConfigurationSchema.safeParse(profile).success).toBe(true);
+    setSlotFloorOverride(profile, code, 1);
+    expect(PrebidConfigurationSchema.safeParse(profile).success).toBe(false);
+  }
+
+  const orphan = structuredClone(legacy);
+  setSlotFloorOverride(orphan, 'unknown-slot', 1);
+  expect(PrebidConfigurationSchema.safeParse(orphan).success).toBe(false);
+
+  const missingBase = structuredClone(legacy);
+  setSlotFloorOverride(missingBase, first, 1);
+  delete (missingBase.setConfig.floors.data.values as Record<string, number>)['*|banner'];
+  expect(PrebidConfigurationSchema.safeParse(missingBase).success).toBe(false);
+
+  const wrongMediaType = structuredClone(legacy);
+  setSlotFloorOverride(wrongMediaType, first, 1);
+  (wrongMediaType.setConfig.floors.data.values as Record<string, number>)[`${first}|video`] = 1;
+  expect(PrebidConfigurationSchema.safeParse(wrongMediaType).success).toBe(false);
+});
+
+it('optional per-slot floors replay simulation and aggregation with exact matched-rule evidence', () => {
+  const timeline = createTimeline('publisher-a');
+  const initial = timeline.history[0]!;
+  const profile = structuredClone(initial.afterPrebid);
+  const first = profile.adUnits[0]!.code;
+  const second = profile.adUnits[1]!.code;
+  const third = profile.adUnits[2]!.code;
+  setSlotFloorOverride(profile, first, 0);
+  setSlotFloorOverride(profile, second, 2);
+  const history = [{ ...initial, afterPrebid: profile }];
+  const events = profile.adUnits.flatMap((unit, index) =>
+    simulateAuction({
+      publisherId: 'publisher-a',
+      auctionId: `slot-floor-${index}`,
+      startedAt: `2026-08-24T12:0${index}:00.000Z`,
+      configurationVersion: initial.version,
+      profile,
+      adUnitCode: unit.code,
+      outcomes: unit.bids.map((bid) => ({ bidderId: bid.bidder, cpm: 1, latencyMs: 100 })),
+    }),
+  );
+  const offers = events.filter(
+    (event) => event.type === 'bidResponse' || event.type === 'bidRejected',
+  );
+  expect(
+    offers
+      .filter((offer) => offer.adUnitId === first)
+      .every((offer) => offer.offer.floorCpm === 0 && offer.offer.floorRule === `${first}|banner`),
+  ).toBe(true);
+  expect(
+    offers
+      .filter((offer) => offer.adUnitId === second)
+      .every(
+        (offer) =>
+          offer.type === 'bidRejected' &&
+          offer.offer.floorCpm === 2 &&
+          offer.offer.floorRule === `${second}|banner`,
+      ),
+  ).toBe(true);
+  expect(
+    offers
+      .filter((offer) => offer.adUnitId === third)
+      .every((offer) => offer.offer.floorCpm === 0.8 && offer.offer.floorRule === '*|banner'),
+  ).toBe(true);
+
+  const result = aggregateDay(events, { publisherId: 'publisher-a', date, history });
+  expect(result.daily.auctions).toBe(3);
+  expect(result.daily.filledOpportunities).toBe(2);
+  expect(result.daily.estimatedRevenue).toBe(0.002);
+
+  const corrupted = structuredClone(events);
+  const offer = corrupted.find(
+    (event) => event.type === 'bidResponse' && event.adUnitId === first,
+  )!;
+  if (offer.type === 'bidResponse') offer.offer.floorRule = 'banner';
+  expect(() => aggregateDay(corrupted, { publisherId: 'publisher-a', date, history })).toThrow(
+    /matched floor mismatch/,
+  );
+
+  for (const controls of [
+    { enabled: false },
+    { skipRate: 100 },
+    { enforcement: { ...profile.setConfig.floors.enforcement, enforceJS: false } },
+  ]) {
+    const bypassed = structuredClone(profile);
+    Object.assign(bypassed.setConfig.floors, controls);
+    const replay = simulateAuction({
+      publisherId: 'publisher-a',
+      auctionId: 'slot-floor-disabled',
+      startedAt: '2026-08-24T13:00:00.000Z',
+      configurationVersion: initial.version,
+      profile: bypassed,
+      adUnitCode: second,
+      outcomes: bypassed.adUnits[1]!.bids.map((bid) => ({
+        bidderId: bid.bidder,
+        cpm: 1,
+        latencyMs: 100,
+      })),
+    });
+    expect(replay.some((event) => event.type === 'bidRejected')).toBe(false);
+    expect(
+      aggregateDay(replay, {
+        publisherId: 'publisher-a',
+        date,
+        history: [{ ...initial, afterPrebid: bypassed }],
+      }).daily.filledOpportunities,
+    ).toBe(1);
   }
 });
 

@@ -25,6 +25,10 @@ function evidence(record: Configuration | ConfigurationHistory): EvidenceReferen
     source,
     recordId,
     observedAt: 'timestamp' in record ? record.timestamp : record.updatedAt,
+    configurationTarget: {
+      kind: 'version',
+      versionId: 'timestamp' in record ? record.timestamp : record.updatedAt,
+    },
   };
 }
 

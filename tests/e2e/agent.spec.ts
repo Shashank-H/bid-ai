@@ -126,13 +126,18 @@ test('real multi-tool evidence changes dashboard filters only on request and sur
   const evidenceId = comparison.evidence[0]!.evidenceId;
   expect(evidenceId).toMatch(/^e\d+$/);
   const card = page.locator('.evidence-card').filter({
-    has: page.getByRole('heading', { name: 'Estimated revenue comparison', exact: true }),
+    has: page.getByRole('button', { name: 'Estimated revenue comparison', exact: true }),
   });
   await page
     .getByRole('link', { name: `[${evidenceId}]`, exact: true })
     .first()
     .click();
-  await expect(card).toBeFocused();
+  await expect(
+    card.getByRole('button', { name: 'Estimated revenue comparison', exact: true }),
+  ).toBeFocused();
+  await expect(
+    card.getByRole('dialog', { name: 'Estimated revenue comparison', exact: true }),
+  ).toBeVisible();
   await expect(applied).toHaveText(initialFilters);
   await expect(card).toContainText('2026-01-01');
   await card.getByRole('button', { name: 'Show in dashboard', exact: true }).click();
@@ -156,6 +161,10 @@ test('real multi-tool evidence changes dashboard filters only on request and sur
   await openAgent(page);
   await restoreConversation(page, id);
   await expect(card).toContainText('Estimated revenue comparison');
+  await card.getByRole('button', { name: 'Estimated revenue comparison', exact: true }).click();
+  await expect(
+    card.getByRole('dialog', { name: 'Estimated revenue comparison', exact: true }),
+  ).toBeVisible();
   await card.getByRole('button', { name: 'Show in dashboard', exact: true }).click();
   await expect(applied).toContainText('vs 2026-01-01 – 2026-01-07 UTC');
   expect(await page.content()).not.toMatch(
@@ -262,8 +271,10 @@ test('mobile agent history, multiline composer and explicit dashboard evidence r
   await historyToggle.focus();
   await historyToggle.press('Enter');
   await expect(page.getByRole('navigation', { name: 'Chat history', exact: true })).toBeVisible();
-  await historyToggle.press('Escape');
+  await expect(page.getByRole('button', { name: 'Back to chat', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('navigation', { name: 'Chat history', exact: true })).toHaveCount(0);
+  await expect(historyToggle).toBeFocused();
   const question = page.getByLabel('Message Bid Intelligence');
   await question.fill('What changed');
   await question.press('Shift+Enter');
@@ -277,8 +288,12 @@ test('mobile agent history, multiline composer and explicit dashboard evidence r
     'What changed\nin my performance?',
   );
   const card = page.locator('.evidence-card').filter({
-    has: page.getByRole('heading', { name: 'Estimated revenue comparison', exact: true }),
+    has: page.getByRole('button', { name: 'Estimated revenue comparison', exact: true }),
   });
+  await card.getByRole('button', { name: 'Estimated revenue comparison', exact: true }).click();
+  await expect(
+    card.getByRole('dialog', { name: 'Estimated revenue comparison', exact: true }),
+  ).toBeVisible();
   await card.getByRole('button', { name: 'Show in dashboard', exact: true }).click();
   await expect(page.getByLabel('Message Bid Intelligence')).toHaveCount(0);
   await expect(page.getByLabel('Applied dashboard filters')).toContainText(

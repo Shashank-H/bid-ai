@@ -11,6 +11,8 @@ import { errorDiagnostics } from './observability/diagnostics.js';
 import type { DatasetMetadataProvider } from './domain/runtime-data.js';
 import type { Dashboard } from './domain/dashboard.js';
 import { registerAnalyticsRoutes } from './routes/analytics.js';
+import { registerConfigurationRoutes } from './routes/configurations.js';
+import type { ConfigurationManagement } from './domain/configuration-management.js';
 
 export interface ProductDependencies {
   authorization: Authorization;
@@ -18,6 +20,7 @@ export interface ProductDependencies {
   agent?: AgentService;
   getMetadata?: DatasetMetadataProvider;
   dashboard?: Dashboard;
+  configurations?: ConfigurationManagement;
 }
 
 export function buildApp(
@@ -56,6 +59,8 @@ export function buildApp(
     registerAuthRoutes(app, product.authorization, product.cancelUser, product.getMetadata);
     if (product.agent) registerConversationRoutes(app, product.authorization, product.agent);
     if (product.dashboard) registerAnalyticsRoutes(app, product.authorization, product.dashboard);
+    if (product.configurations)
+      registerConfigurationRoutes(app, product.authorization, product.configurations);
   }
 
   app.setErrorHandler((error, request, reply) => {

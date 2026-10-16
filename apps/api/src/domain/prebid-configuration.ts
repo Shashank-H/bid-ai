@@ -1,4 +1,8 @@
-import { ConfigurationParameterImpactSchema } from '@bid/shared';
+import {
+  ConfigurationParameterImpactSchema,
+  getBannerFloorRule,
+  getEffectiveBannerFloor,
+} from '@bid/shared';
 import type { ConfigurationParameterImpact, PrebidConfiguration } from '@bid/shared';
 
 /** Resolve only the declared client-side banner profile; no code is read from stored JSON. */
@@ -22,7 +26,8 @@ export function resolvePrebidAuction(profile: PrebidConfiguration, adUnitCode: s
     configuredTimeoutMs: profile.setConfig.bidderTimeout,
     effectiveTimeoutMs: profile.requestBids.timeout ?? profile.setConfig.bidderTimeout,
     currency: profile.setConfig.currency.adServerCurrency,
-    floorCpm: profile.setConfig.floors.data.values.banner,
+    floorCpm: getEffectiveBannerFloor(profile, adUnitCode),
+    floorRule: getBannerFloorRule(profile, adUnitCode),
     ttlBufferSeconds: profile.setConfig.ttlBuffer,
   };
 }
@@ -79,7 +84,7 @@ const ENTRIES: ConfigurationParameterImpact[] = [
     path: 'setConfig.floors.data.schema / values / default / currency',
     support: 'modeled',
     description:
-      'The banner rule determines USD CPM eligibility; fallback is used only when no rule matches. This profile uses static media-type rules, not floorMin as a static floor.',
+      'The global banner rule sets USD CPM eligibility. Optional adUnitCode|mediaType rules select an exact slot override before *|banner in the same native package; zero is a valid override. Legacy mediaType-only rules remain supported.',
     publisherImpact:
       'Higher matched floors can trade winning prices for fewer eligible offers. The net revenue direction must be observed.',
     visitorImpact:

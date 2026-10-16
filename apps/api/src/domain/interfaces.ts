@@ -24,6 +24,14 @@ export interface ExecutionContext {
   readonly identity: UserPublisherContext;
   readonly correlationId: string;
   readonly signal: AbortSignal;
+  // Set by the graph, never parsed from tool/model input. Stable across checkpoint retries.
+  readonly invocation?: {
+    readonly conversationId: string;
+    readonly turnId: string;
+    readonly toolCallId: string;
+    readonly evidence: readonly import('@bid/shared').EvidenceReference[];
+    readonly allowNavigation: boolean;
+  };
 }
 
 export interface UserRepository {
