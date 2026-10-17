@@ -568,7 +568,12 @@ export function initializeTracing(
               update({
                 model: result.model,
                 output: maskTraceData(
-                  { route: result.route, intent: result.intent, confidence: result.confidence },
+                  {
+                    route: result.route,
+                    intent: result.intent,
+                    confidence: result.confidence,
+                    answers: result.answers,
+                  },
                   secrets,
                 ),
                 usageDetails: {

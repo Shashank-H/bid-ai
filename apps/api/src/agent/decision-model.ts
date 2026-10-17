@@ -20,6 +20,7 @@ export interface DecisionResult {
   confidence: number;
   model: string;
   usage: { input_tokens: number; output_tokens: number };
+  answers: Record<string, z.infer<typeof Choice>>;
 }
 
 export type DecisionRunner = (input: DecisionInput, signal: AbortSignal) => Promise<DecisionResult>;
@@ -95,6 +96,17 @@ function questionsFor(input: DecisionInput): Record<string, Question> {
   };
 }
 
+export function decisionPrompt(input: DecisionInput, env: NodeJS.ProcessEnv = process.env) {
+  const settings = readDecisionModelSettings(env);
+  const state = sanitizeDiagnostics(input.state, [
+    settings.apiKey,
+    env['LLM_API_KEY'] ?? '',
+    env['LANGFUSE_SECRET_KEY'] ?? '',
+  ]);
+
+  return { model: settings.model, state, questions: questionsFor(input) };
+}
+
 async function boundedJson(response: globalThis.Response): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Missing decision response');
@@ -122,13 +134,9 @@ export function decisionRunner(env: NodeJS.ProcessEnv): DecisionRunner {
   return async (input, signal) => {
     signal.throwIfAborted();
     const settings = readDecisionModelSettings(env);
-    const questions = questionsFor(input);
-    const state = sanitizeDiagnostics(input.state, [
-      settings.apiKey,
-      env['LLM_API_KEY'] ?? '',
-      env['LANGFUSE_SECRET_KEY'] ?? '',
-    ]);
-    const body = JSON.stringify({ model: settings.model, state, questions });
+    const prompt = decisionPrompt(input, env);
+    const questions = prompt.questions;
+    const body = JSON.stringify(prompt);
     if (Buffer.byteLength(body) > 32768) {
       throw new HttpError(429, 'BUDGET_EXCEEDED', 'The decision context limit was reached.');
     }
@@ -195,6 +203,7 @@ export function decisionRunner(env: NodeJS.ProcessEnv): DecisionRunner {
         confidence,
         model: result.model,
         usage: result.usage,
+        answers: result.answers,
       };
     } catch {
       signal.throwIfAborted();
