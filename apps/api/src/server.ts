@@ -10,6 +10,7 @@ import { ConversationRepository } from './db/conversations.js';
 import { AgentService } from './agent/service.js';
 import { reportFailure } from './observability/diagnostics.js';
 import { createRuntimeData } from './domain/runtime-data.js';
+import { decisionRunner } from './agent/decision-model.js';
 
 let tracing: TracingRuntime | undefined;
 
@@ -17,7 +18,9 @@ try {
   const { database: settings, repositoryMode } = readEnvironment(process.env);
   const tracingSettings = readTracingSettings(process.env);
   const { initializeTracing } = await import('./observability/tracing.js');
-  tracing = initializeTracing(tracingSettings, { secrets: [process.env['LLM_API_KEY'] ?? ''] });
+  tracing = initializeTracing(tracingSettings, {
+    secrets: [process.env['LLM_API_KEY'] ?? '', process.env['DECISION_MODEL_API_KEY'] ?? ''],
+  });
   const client = createDatabaseClient(settings);
   const authorization = new Authorization(
     new IdentityRepository(client, settings.tablePrefix),
@@ -34,6 +37,7 @@ try {
     tracing,
     undefined,
     runtimeData,
+    decisionRunner(process.env),
   );
   const app = buildApp(
     {
@@ -71,6 +75,7 @@ try {
   reportFailure('startup_failed', {}, cause, [
     process.env['LLM_API_KEY'] ?? '',
     process.env['LANGFUSE_SECRET_KEY'] ?? '',
+    process.env['DECISION_MODEL_API_KEY'] ?? '',
   ]);
   await tracing?.shutdown();
   console.error('STARTUP_FAILED: check application logs for diagnostic details');

@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { ServerResponse } from 'node:http';
-import { getGlobalBannerFloor, setGlobalBannerFloor } from '../../packages/shared/src/index.js';
+import { getGlobalBannerFloor, setGlobalBannerFloor } from '../../packages/shared/dist/index.js';
 import type { ToolResult } from '../../packages/shared/src/index.js';
 
 export async function startModelServer(
@@ -9,8 +9,12 @@ export async function startModelServer(
   profile: 'fixture' | 'phase3' = 'fixture',
 ) {
   let requests = 0;
+  let decisionRequests = 0;
   const server = createServer(async (request, response) => {
-    if (request.url !== '/v1/chat/completions' || request.method !== 'POST') {
+    if (
+      !['/v1/chat/completions', '/v1/systemone'].includes(request.url ?? '') ||
+      request.method !== 'POST'
+    ) {
       response.writeHead(404).end();
       return;
     }
@@ -24,6 +28,68 @@ export async function startModelServer(
       }
     }
 
+    if (request.url === '/v1/systemone') {
+      decisionRequests++;
+      const decision = JSON.parse(body) as {
+        state: { request: string; stage: string; dialogue?: { text: string }[] };
+        questions: Record<string, { criteria: Record<string, string> }>;
+      };
+      const question = decision.state.request;
+      const stage = decision.state.stage;
+      if (question.includes('mock:decision-timeout')) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      const status = question.includes('mock:decision-auth')
+        ? 401
+        : question.includes('mock:decision-rate-limit')
+          ? 429
+          : question.includes('mock:decision-failure') ||
+              (question.includes('mock:decision-after-read-failure') && stage !== 'entry')
+            ? 503
+            : 200;
+      const answers = Object.fromEntries(
+        Object.entries(decision.questions).map(([id, { criteria }]) => {
+          let choice =
+            id === 'scope'
+              ? question.includes('mock:out-of-scope')
+                ? 'out_of_scope'
+                : 'in_scope'
+              : id === 'intent'
+                ? question.includes('mock:configuration-')
+                  ? 'configuration'
+                  : 'investigate'
+                : 'response';
+          if (question.includes('mock:decision-uncertain')) choice = 'uncertain';
+          const options = Object.keys(criteria);
+
+          return [
+            id,
+            {
+              type: 'choice',
+              choice,
+              confidence: question.includes('mock:decision-uncertain') ? 0.1 : 1,
+              probabilities: Object.fromEntries(
+                options.map((option) => [option, option === choice ? 1 : 0]),
+              ),
+            },
+          ];
+        }),
+      );
+      response.writeHead(status, { 'Content-Type': 'application/json' });
+      response.end(
+        JSON.stringify(
+          question.includes('mock:decision-invalid')
+            ? { answers: {} }
+            : {
+                model: 'test-decision-model',
+                answers,
+                usage: { input_tokens: 50, output_tokens: 10 },
+              },
+        ),
+      );
+      return;
+    }
+
     requests++;
     const input = JSON.parse(body) as {
       messages: Array<{ role: string; content?: string }>;
@@ -31,6 +97,11 @@ export async function startModelServer(
     };
     const question =
       input.messages.filter((message) => message.role === 'user').at(-1)?.content ?? '';
+    const isResponse = input.messages.some(
+      (message) =>
+        message.role === 'system' &&
+        message.content?.startsWith('You are the Analysis/response specialist.'),
+    );
     const tools = input.messages.filter((message) => message.role === 'tool');
     const lastUserIndex = input.messages.map((message) => message.role).lastIndexOf('user');
     const currentTools = input.messages
@@ -46,7 +117,7 @@ export async function startModelServer(
         choices: [{ index: 0, delta, finish_reason }],
       });
 
-    if (question.includes('mock:slow')) {
+    if (question.includes('mock:slow') && (!currentTools.length || isResponse)) {
       // Provisional text belongs to the tool-planning round, not the final cited answer.
       if (!currentTools.length) chunk({ content: 'Waiting for the demo investigation…' });
       await new Promise<void>((resolve) => {
@@ -61,7 +132,7 @@ export async function startModelServer(
 
     const results = currentTools.map((message) => JSON.parse(message.content ?? '{}'));
     const configuration = configurationCalls(question, results);
-    if (configuration?.length || !currentTools.length) {
+    if (!isResponse && (configuration?.length || !currentTools.length)) {
       const month = input.messages.some(
         (message) => message.role === 'system' && message.content?.includes('2026-02'),
       )
@@ -85,6 +156,23 @@ export async function startModelServer(
             ]);
       if (question.includes('mock:malformed')) calls[0]!.arguments = '{invalid';
       if (question.includes('mock:unknown')) calls[0]!.name = 'mutate_configuration';
+      if (question.includes('mock:cross-role')) calls[0]!.name = 'configuration_propose_draft';
+
+      const complete =
+        configuration === null ||
+        !question.includes('mock:configuration-propose') ||
+        calls.some((call) => call.name === 'configuration_propose_draft');
+      if (complete) {
+        chunk({
+          content: JSON.stringify({
+            complete: true,
+            summary:
+              'PRIVATE_HANDOFF_SENTINEL: use the final authorized tool result to determine the outcome.',
+            evidenceIds: [],
+            limitations: [],
+          }),
+        });
+      }
 
       // Multiple indices arrive out of order and arguments span distinct chunks.
       const indices = calls.map((_, index) => index).reverse();
@@ -104,6 +192,23 @@ export async function startModelServer(
         chunk({ tool_calls: [{ index, function: { arguments: call.arguments.slice(middle) } }] });
       }
       chunk({}, 'tool_calls');
+    } else if (!isResponse) {
+      chunk(
+        {
+          content: JSON.stringify({
+            summary: 'PRIVATE_HANDOFF_SENTINEL: gathered authorized tool results.',
+            evidenceIds: [
+              ...new Set(
+                results.flatMap((result) =>
+                  (result.evidence ?? []).map((entry: { evidenceId: string }) => entry.evidenceId),
+                ),
+              ),
+            ],
+            limitations: [],
+          }),
+        },
+        'stop',
+      );
     } else {
       const comparison = results.find((result) => result.data?.kind === 'period-comparison');
       const history = results.find((result) => result.data?.kind === 'configuration-history');
@@ -145,6 +250,9 @@ export async function startModelServer(
     url: `http://${host}:${address.port}/v1`,
     get requests() {
       return requests;
+    },
+    get decisionRequests() {
+      return decisionRequests;
     },
     async close() {
       server.closeAllConnections();

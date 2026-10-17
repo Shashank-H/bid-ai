@@ -46,6 +46,8 @@ export const turns = pgTable(
     errorCode: text('error_code'),
     resumeCount: integer('resume_count').notNull().default(0),
     modelAttempts: integer('model_attempts').notNull().default(0),
+    specialistAttempts: integer('specialist_attempts').notNull().default(0),
+    decisionAttempts: integer('decision_attempts').notNull().default(0),
     toolAttempts: integer('tool_attempts').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

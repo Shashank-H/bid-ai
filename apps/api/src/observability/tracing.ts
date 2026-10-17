@@ -26,6 +26,7 @@ import {
 } from '@langfuse/tracing';
 import type OpenAI from 'openai';
 import type { TracingSettings } from '../env.js';
+import type { DecisionResult } from '../agent/decision-model.js';
 import { diagnosticEndpoint, errorDiagnostics } from './diagnostics.js';
 
 export interface TracingRuntime {
@@ -38,6 +39,10 @@ export interface TracingRuntime {
     operation: (client: OpenAI) => Promise<T>,
     context?: Record<string, unknown>,
   ): Promise<T>;
+  decision(
+    input: Record<string, unknown>,
+    operation: () => Promise<DecisionResult>,
+  ): Promise<DecisionResult>;
   tool<T>(input: unknown, operation: () => T | Promise<T>, name?: string): Promise<T>;
   turn<T>(
     input: { conversationId: string; turnId: string; publisherId: string },
@@ -52,6 +57,7 @@ const disabledTracing: TracingRuntime = {
   traceId: undefined,
   probe: (operation) => operation(),
   generation: (_name, client, operation) => operation(client),
+  decision: (_input, operation) => operation(),
   tool: async (_input, operation) => operation(),
   turn: (_input, operation) => operation(),
   flush: async () => {},
@@ -538,6 +544,58 @@ export function initializeTracing(
         },
         { asType: 'generation' },
       ),
+    decision: async (input, operation) => {
+      let invoked = false;
+      const started = Date.now();
+
+      try {
+        return await startActiveObservation(
+          'decision-model',
+          async (observation) => {
+            // Instrumentation must neither mask results nor cause a provider call to replay.
+            const update = (values: Parameters<typeof observation.update>[0]) => {
+              try {
+                observation.update(values);
+              } catch {
+                /* best-effort tracing */
+              }
+            };
+            update({ input: maskTraceData(input, secrets) });
+            invoked = true;
+
+            try {
+              const result = await operation();
+              update({
+                model: result.model,
+                output: maskTraceData(
+                  { route: result.route, intent: result.intent, confidence: result.confidence },
+                  secrets,
+                ),
+                usageDetails: {
+                  input: result.usage.input_tokens,
+                  output: result.usage.output_tokens,
+                },
+                metadata: { ...input, elapsedMs: Date.now() - started, stage: result.stage },
+              });
+
+              return result;
+            } catch (error) {
+              update({
+                level: 'ERROR',
+                statusMessage: errorStatus(error, secrets),
+                output: { error: errorDiagnostics(error, secrets) },
+              });
+              throw error;
+            }
+          },
+          { asType: 'generation' },
+        );
+      } catch (error) {
+        if (invoked) throw error;
+
+        return operation();
+      }
+    },
     turn: (input, operation) =>
       propagateAttributes(
         {

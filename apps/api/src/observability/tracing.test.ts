@@ -481,13 +481,13 @@ describe('actual Langfuse OTLP export', () => {
 
       const spans = allSpans().slice(start);
       expect(spans.map((span) => span.name).sort()).toEqual([
-        'investigation-model',
         'publisher-investigation',
+        'specialist-read',
       ]);
       expect(spans.every((span) => attribute(span, 'langfuse.observation.level') === 'ERROR')).toBe(
         true,
       );
-      const generation = spans.find((span) => span.name === 'investigation-model')!;
+      const generation = spans.find((span) => span.name === 'specialist-read')!;
       const root = spans.find((span) => span.name === 'publisher-investigation')!;
       expect(generation.parentSpanId).toBe(root.spanId);
       expect(attribute(generation, 'langfuse.observation.model.name')).toBe('test-model');

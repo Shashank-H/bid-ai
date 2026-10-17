@@ -164,6 +164,52 @@ export function readAgentSettings(env: NodeJS.ProcessEnv = process.env) {
   });
 }
 
+export interface DecisionModelSettings {
+  endpoint: string;
+  apiKey: string;
+  model: string;
+  timeoutMs: number;
+  minConfidence: number;
+}
+
+/** Read only when agent work starts; foundation startup does not require model keys. */
+export function readDecisionModelSettings(
+  env: NodeJS.ProcessEnv = process.env,
+): DecisionModelSettings {
+  return safeRead(() => {
+    const values = z
+      .object({
+        DECISION_MODEL_ENDPOINT: z.string().url().max(2048),
+        DECISION_MODEL_API_KEY: z.string().trim().min(1).max(4096),
+        DECISION_MODEL_NAME: z.string().trim().min(1).max(256).default('jev-latest'),
+        DECISION_MODEL_TIMEOUT_MS: z.coerce.number().int().min(100).max(30000).default(5000),
+        DECISION_MODEL_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.5),
+      })
+      .parse(env);
+    const url = new URL(values.DECISION_MODEL_ENDPOINT);
+    const local = ['localhost', '127.0.0.1', '[::1]', 'mock-model'].includes(url.hostname);
+
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (url.protocol !== 'https:' &&
+        !(url.protocol === 'http:' && local && env['NODE_ENV'] !== 'production'))
+    ) {
+      throw new Error('Invalid decision model URL');
+    }
+
+    return {
+      endpoint: url.href,
+      apiKey: values.DECISION_MODEL_API_KEY,
+      model: values.DECISION_MODEL_NAME,
+      timeoutMs: values.DECISION_MODEL_TIMEOUT_MS,
+      minConfidence: values.DECISION_MODEL_MIN_CONFIDENCE,
+    };
+  });
+}
+
 export interface ModelSettings {
   baseURL: string;
   apiKey: string;

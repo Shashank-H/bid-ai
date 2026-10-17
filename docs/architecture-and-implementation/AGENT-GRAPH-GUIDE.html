@@ -1,0 +1,1721 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bid AI · Agent call path</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f5f4ee;
+        --surface: #fffefa;
+        --soft: #edf1eb;
+        --ink: #263832;
+        --muted: #65756d;
+        --line: #d7dfd7;
+        --teal: #246c63;
+        --blue: #426d91;
+        --amber: #946b2f;
+        --plum: #745875;
+        font:
+          14px/1.5 Inter,
+          ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+      }
+
+      header {
+        max-width: 1500px;
+        margin: auto;
+        padding: 22px 24px 8px;
+      }
+
+      .kicker {
+        color: var(--teal);
+        font:
+          700 11px ui-monospace,
+          monospace;
+        letter-spacing: 0.13em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 6px 0;
+        font-size: clamp(29px, 4vw, 43px);
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+      }
+
+      header p {
+        margin: 8px 0;
+        color: var(--muted);
+      }
+
+      .tabs {
+        max-width: 1500px;
+        margin: 12px auto 0;
+        padding: 0 24px;
+        display: block;
+      }
+
+      .tabs > input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
+      .tabs > label {
+        display: inline-block;
+        margin: 0 6px 6px 0;
+        cursor: pointer;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--muted);
+        padding: 8px 13px;
+      }
+
+      #tab-a:checked + label,
+      #tab-b:checked + label,
+      #tab-c:checked + label {
+        background: var(--teal);
+        border-color: var(--teal);
+        color: white;
+      }
+
+      .layout {
+        max-width: 1500px;
+        margin: auto;
+        padding: 12px 24px 24px;
+      }
+
+      .scene {
+        display: none;
+      }
+
+      #tab-a:checked ~ .scenes #scene-a,
+      #tab-b:checked ~ .scenes #scene-b,
+      #tab-c:checked ~ .scenes #scene-c {
+        display: block;
+      }
+
+      .scene-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 15px;
+        align-items: start;
+      }
+
+      .diagram,
+      .sidebar {
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: var(--surface);
+        box-shadow: 0 8px 26px #334b3a0a;
+      }
+
+      .diagram {
+        overflow: auto;
+        padding: 12px;
+      }
+
+      .stage {
+        position: relative;
+        width: max(100%, 850px);
+      }
+
+      .hotspots {
+        position: absolute;
+        inset: 0;
+      }
+
+      .hotspot {
+        position: absolute;
+        display: block;
+        cursor: pointer;
+        border-radius: 10px;
+      }
+
+      .hotspot:hover {
+        background: #246c6308;
+      }
+
+      .hotspot:focus-visible {
+        outline: 3px solid var(--teal);
+        outline-offset: -3px;
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        font-family: inherit;
+      }
+
+      svg .node {
+        cursor: pointer;
+      }
+
+      svg .node rect {
+        stroke-width: 1.5;
+        rx: 12;
+        transition: 0.15s;
+      }
+
+      svg .node:hover rect,
+      svg .node:focus rect {
+        stroke: var(--teal);
+        stroke-width: 3;
+      }
+
+      svg .node:focus {
+        outline: none;
+      }
+
+      .box-hit {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+      }
+
+      svg .step {
+        fill: var(--teal);
+        font:
+          700 10px ui-monospace,
+          monospace;
+        letter-spacing: 0.07em;
+      }
+
+      svg .title {
+        fill: var(--ink);
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      svg .copy {
+        fill: var(--muted);
+        font-size: 11px;
+      }
+
+      svg .lane {
+        fill: #78867e;
+        font:
+          700 11px ui-monospace,
+          monospace;
+        letter-spacing: 0.1em;
+      }
+
+      svg .edge {
+        fill: none;
+        stroke: #84978c;
+        stroke-width: 2;
+        marker-end: url(#arrow);
+      }
+
+      svg .dash {
+        stroke-dasharray: 5 5;
+        stroke: var(--teal);
+      }
+
+      svg .group {
+        fill: #f7f8f3;
+        stroke: #b9c9bd;
+        stroke-width: 1.5;
+        rx: 16;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 12px;
+        padding: 17px;
+      }
+
+      .sidebar h2 {
+        margin: 0 0 11px;
+        color: var(--teal);
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .pick {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .detail {
+        display: none;
+      }
+
+      #pick-a-default:checked ~ .sidebar #detail-a-default {
+        display: block;
+      }
+      #pick-a-db:checked ~ .sidebar #detail-a-db {
+        display: block;
+      }
+      #pick-a-env:checked ~ .sidebar #detail-a-env {
+        display: block;
+      }
+      #pick-a-tracing:checked ~ .sidebar #detail-a-tracing {
+        display: block;
+      }
+      #pick-a-client:checked ~ .sidebar #detail-a-client {
+        display: block;
+      }
+      #pick-a-auth:checked ~ .sidebar #detail-a-auth {
+        display: block;
+      }
+      #pick-a-runtime:checked ~ .sidebar #detail-a-runtime {
+        display: block;
+      }
+      #pick-a-repo:checked ~ .sidebar #detail-a-repo {
+        display: block;
+      }
+      #pick-a-model:checked ~ .sidebar #detail-a-model {
+        display: block;
+      }
+      #pick-a-service:checked ~ .sidebar #detail-a-service {
+        display: block;
+      }
+      #pick-a-app:checked ~ .sidebar #detail-a-app {
+        display: block;
+      }
+      #pick-a-listen:checked ~ .sidebar #detail-a-listen {
+        display: block;
+      }
+      #pick-a-ready:checked ~ .sidebar #detail-a-ready {
+        display: block;
+      }
+      #pick-b-default:checked ~ .sidebar #detail-b-default {
+        display: block;
+      }
+      #pick-b-submit:checked ~ .sidebar #detail-b-submit {
+        display: block;
+      }
+      #pick-b-conv:checked ~ .sidebar #detail-b-conv {
+        display: block;
+      }
+      #pick-b-requestid:checked ~ .sidebar #detail-b-requestid {
+        display: block;
+      }
+      #pick-b-streamturn:checked ~ .sidebar #detail-b-streamturn {
+        display: block;
+      }
+      #pick-b-hook:checked ~ .sidebar #detail-b-hook {
+        display: block;
+      }
+      #pick-b-route:checked ~ .sidebar #detail-b-route {
+        display: block;
+      }
+      #pick-b-prepare:checked ~ .sidebar #detail-b-prepare {
+        display: block;
+      }
+      #pick-b-lock:checked ~ .sidebar #detail-b-lock {
+        display: block;
+      }
+      #pick-b-sse:checked ~ .sidebar #detail-b-sse {
+        display: block;
+      }
+      #pick-b-run:checked ~ .sidebar #detail-b-run {
+        display: block;
+      }
+      #pick-b-checkpointer:checked ~ .sidebar #detail-b-checkpointer {
+        display: block;
+      }
+      #pick-b-graph:checked ~ .sidebar #detail-b-graph {
+        display: block;
+      }
+      #pick-b-state:checked ~ .sidebar #detail-b-state {
+        display: block;
+      }
+      #pick-b-invoke:checked ~ .sidebar #detail-b-invoke {
+        display: block;
+      }
+      #pick-c-default:checked ~ .sidebar #detail-c-default {
+        display: block;
+      }
+      #pick-c-invoke:checked ~ .sidebar #detail-c-invoke {
+        display: block;
+      }
+      #pick-c-model:checked ~ .sidebar #detail-c-model {
+        display: block;
+      }
+      #pick-c-tool:checked ~ .sidebar #detail-c-tool {
+        display: block;
+      }
+      #pick-c-final:checked ~ .sidebar #detail-c-final {
+        display: block;
+      }
+      #pick-c-checkpoint:checked ~ .sidebar #detail-c-checkpoint {
+        display: block;
+      }
+      #pick-c-toolresult:checked ~ .sidebar #detail-c-toolresult {
+        display: block;
+      }
+      #pick-c-finish:checked ~ .sidebar #detail-c-finish {
+        display: block;
+      }
+
+      .detail h3 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      .detail p {
+        margin: 8px 0;
+        color: var(--muted);
+      }
+
+      .detail .why {
+        padding: 11px;
+        border-radius: 10px;
+        background: var(--soft);
+        color: var(--ink);
+        font-size: 13px;
+      }
+
+      .detail h4 {
+        margin: 16px 0 6px;
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .detail a {
+        display: block;
+        margin: 6px 0;
+        color: var(--blue);
+        font:
+          11px/1.45 ui-monospace,
+          monospace;
+        text-decoration: none;
+        overflow-wrap: anywhere;
+      }
+
+      .detail a:hover {
+        text-decoration: underline;
+      }
+
+      .tip {
+        margin-top: 13px;
+        padding-top: 11px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      footer {
+        max-width: 1500px;
+        margin: auto;
+        padding: 0 24px 22px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media (max-width: 900px) {
+        .scene-grid {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          position: static;
+        }
+      }
+
+      @media (max-width: 600px) {
+        header {
+          padding: 19px 15px 8px;
+        }
+        .tabs {
+          padding: 0 15px;
+        }
+        .layout {
+          padding: 10px 12px 20px;
+        }
+        footer {
+          padding: 0 15px 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="kicker">Bid AI · Exact call path</div>
+      <h1>Before startup → first message → agent run</h1>
+      <p>
+        This version uses HTML/CSS only—no JavaScript. Click a box to change the right-hand
+        explanation. Click A/B/C to change diagrams. Both interactions use native HTML/CSS
+        controls—no JavaScript.
+      </p>
+    </header>
+    <div class="tabs" role="tablist" aria-label="Agent call path">
+      <input type="radio" name="scene" id="tab-a" checked /><label for="tab-a"
+        >A · Before first message</label
+      >
+      <input type="radio" name="scene" id="tab-b" /><label for="tab-b"
+        >B · First message enters</label
+      >
+      <input type="radio" name="scene" id="tab-c" /><label for="tab-c">C · Agent execution</label>
+      <div class="scenes layout">
+        <section class="scene" id="scene-a">
+          <div class="scene-grid">
+            <input class="pick" type="radio" name="pick-a" id="pick-a-default" checked /><input
+              class="pick"
+              type="radio"
+              name="pick-a"
+              id="pick-a-db"
+            /><input class="pick" type="radio" name="pick-a" id="pick-a-env" /><input
+              class="pick"
+              type="radio"
+              name="pick-a"
+              id="pick-a-tracing"
+            /><input class="pick" type="radio" name="pick-a" id="pick-a-client" /><input
+              class="pick"
+              type="radio"
+              name="pick-a"
+              id="pick-a-auth"
+            /><input class="pick" type="radio" name="pick-a" id="pick-a-runtime" /><input
+              class="pick"
+              type="radio"
+              name="pick-a"
+              id="pick-a-repo"
+            /><input class="pick" type="radio" name="pick-a" id="pick-a-model" /><input
+              class="pick"
+              type="radio"
+              name="pick-a"
+              id="pick-a-service"
+            /><input class="pick" type="radio" name="pick-a" id="pick-a-app" /><input
+              class="pick"
+              type="radio"
+              name="pick-a"
+              id="pick-a-listen"
+            /><input class="pick" type="radio" name="pick-a" id="pick-a-ready" />
+            <div class="diagram">
+              <div class="stage" style="aspect-ratio: 1050/570">
+                <svg viewBox="0 0 1050 570" role="img" aria-label="Pre-first-message setup diagram">
+                  <defs>
+                    <marker
+                      id="arrow-a"
+                      viewBox="0 0 10 10"
+                      refX="8"
+                      refY="5"
+                      markerWidth="7"
+                      markerHeight="7"
+                      orient="auto"
+                    >
+                      <path d="M0 0L10 5L0 10z" fill="#84978c" />
+                    </marker>
+                  </defs>
+                  <text x="24" y="28" class="lane">
+                    BEFORE SERVER START · EXPLICIT DATABASE PROVISIONING
+                  </text>
+                  <g class="node" tabindex="0">
+                    <rect x="24" y="43" width="1000" height="62" fill="#f3ead8" stroke="#d8c69f" />
+                    <text x="42" y="66" class="step">SEPARATE CLI COMMAND · postgres:init</text>
+                    <text x="42" y="89" class="title">
+                      Drizzle migrations → LangGraph saver.setup() → exit
+                    </text>
+                  </g>
+                  <path class="edge dash" marker-end="url(#arrow-a)" d="M524 105V137" />
+                  <text x="24" y="159" class="lane">
+                    SERVER PROCESS STARTS · server.ts · FOLLOW 01 → 10
+                  </text>
+                  <path
+                    class="edge"
+                    marker-end="url(#arrow-a)"
+                    d="M169 236H190M339 236H360M509 236H530M679 236H700"
+                  />
+                  <path
+                    class="edge"
+                    marker-end="url(#arrow-a)"
+                    d="M849 236C880 236 880 344 849 344M700 344H679M530 344H509M360 344H339"
+                  />
+                  <g class="node" tabindex="0">
+                    <rect x="20" y="190" width="149" height="92" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="33" y="212" class="step">01 · CONFIG</text>
+                    <text x="33" y="239" class="title">Read env</text>
+                    <text x="33" y="260" class="copy">validate settings</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="190" y="190" width="149" height="92" fill="#eee6ef" stroke="#cbb7ce" />
+                    <text x="203" y="212" class="step">02 · OBSERVE</text>
+                    <text x="203" y="239" class="title">Tracing</text>
+                    <text x="203" y="260" class="copy">initialize telemetry</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="360" y="190" width="149" height="92" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="373" y="212" class="step">03 · DATA</text>
+                    <text x="373" y="239" class="title">Dynamo client</text>
+                    <text x="373" y="260" class="copy">runtime data access</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="530" y="190" width="149" height="92" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="543" y="212" class="step">04 · IDENTITY</text>
+                    <text x="543" y="239" class="title">Authorization</text>
+                    <text x="543" y="260" class="copy">repository + resolver</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="700" y="190" width="149" height="92" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="713" y="212" class="step">05 · CAPABILITIES</text>
+                    <text x="713" y="239" class="title">Runtime data</text>
+                    <text x="713" y="260" class="copy">repositories + tools</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="700" y="298" width="149" height="92" fill="#f3ead8" stroke="#d8c69f" />
+                    <text x="713" y="320" class="step">06 · APP DATA</text>
+                    <text x="713" y="347" class="title">Conv. repository</text>
+                    <text x="713" y="368" class="copy">Postgres operations</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="530" y="298" width="149" height="92" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="543" y="320" class="step">07 · MODEL</text>
+                    <text x="543" y="347" class="title">Model runner</text>
+                    <text x="543" y="368" class="copy">configured, not called</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="360" y="298" width="149" height="92" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="373" y="320" class="step">08 · SERVICE</text>
+                    <text x="373" y="347" class="title">AgentService</text>
+                    <text x="373" y="368" class="copy">checkpoint pool + saver</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="190" y="298" width="149" height="92" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="203" y="320" class="step">09 · ROUTES</text>
+                    <text x="203" y="347" class="title">Build Fastify app</text>
+                    <text x="203" y="368" class="copy">register handlers</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="20" y="298" width="149" height="92" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="33" y="320" class="step">10 · LISTEN</text>
+                    <text x="33" y="347" class="title">Open port 3000</text>
+                    <text x="33" y="368" class="copy">accept HTTP requests</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="282" y="418" width="520" height="72" fill="#fffefa" stroke="#9fb5a6" />
+                    <text x="302" y="444" class="step">READINESS PROBE · NOT A MIGRATION STEP</text>
+                    <text x="302" y="470" class="title">
+                      Checks runtime data + conversation/checkpoint tables
+                    </text>
+                  </g>
+                  <path class="edge dash" marker-end="url(#arrow-a)" d="M95 390V438H282" />
+                  <text x="24" y="532" class="copy">
+                    Row 1 flows left → right; row 2 returns right → left. Click any step for its
+                    source.
+                  </text>
+                </svg>
+                <div class="hotspots">
+                  <label
+                    class="hotspot"
+                    for="pick-a-db"
+                    aria-label="Select diagram block"
+                    style="left: 2.2857%; top: 7.5439%; width: 95.2381%; height: 10.8772%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-env"
+                    aria-label="Select diagram block"
+                    style="left: 1.9048%; top: 33.3333%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-tracing"
+                    aria-label="Select diagram block"
+                    style="left: 18.0952%; top: 33.3333%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-client"
+                    aria-label="Select diagram block"
+                    style="left: 34.2857%; top: 33.3333%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-auth"
+                    aria-label="Select diagram block"
+                    style="left: 50.4762%; top: 33.3333%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-runtime"
+                    aria-label="Select diagram block"
+                    style="left: 66.6667%; top: 33.3333%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-repo"
+                    aria-label="Select diagram block"
+                    style="left: 66.6667%; top: 52.2807%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-model"
+                    aria-label="Select diagram block"
+                    style="left: 50.4762%; top: 52.2807%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-service"
+                    aria-label="Select diagram block"
+                    style="left: 34.2857%; top: 52.2807%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-app"
+                    aria-label="Select diagram block"
+                    style="left: 18.0952%; top: 52.2807%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-listen"
+                    aria-label="Select diagram block"
+                    style="left: 1.9048%; top: 52.2807%; width: 14.1905%; height: 16.1404%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-a-ready"
+                    aria-label="Select diagram block"
+                    style="left: 26.8571%; top: 73.3333%; width: 49.5238%; height: 12.6316%"
+                  ></label>
+                </div>
+              </div>
+            </div>
+            <aside class="sidebar">
+              <h2>Step details · A</h2>
+              <div class="detail default" id="detail-a-default">
+                <h3>Start before startup</h3>
+                <p>
+                  PostgreSQL tables are provisioned by an explicit CLI command. Then server.ts
+                  builds shared clients/services, registers routes, and listens.
+                </p>
+                <div class="why">
+                  Select a numbered block. The exact function and code location appear here.
+                </div>
+              </div>
+              <div class="detail" id="detail-a-db">
+                <h3>Pre-run · postgres:init</h3>
+                <p>
+                  This is a separate CLI operation, not automatic API startup. It runs Drizzle
+                  migrations, calls LangGraph saver.setup(), closes its pool, and exits.
+                </p>
+                <div class="why">
+                  The API expects these tables to exist. Readiness checks them; it does not create
+                  them.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/commands/cli.ts:88:1"
+                  >CLI command · cli.ts:88</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/commands/postgres-init.ts:6:1"
+                  >Migrate + saver setup · postgres-init.ts:6</a
+                >
+              </div>
+              <div class="detail" id="detail-a-env">
+                <h3>01 · Read environment</h3>
+                <p>server.ts loads validated process configuration before wiring the server.</p>
+                <div class="why">
+                  Invalid or missing required config can stop the process before it listens.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/server.ts:16:1"
+                  >Startup entry · server.ts:16</a
+                >
+              </div>
+              <div class="detail" id="detail-a-tracing">
+                <h3>02 · Initialize tracing</h3>
+                <p>Tracing is initialized before constructing the model runner and service.</p>
+                <div class="why">This prepares observability; it does not call the LLM.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/server.ts:18:1"
+                  >Startup tracing · server.ts:18</a
+                >
+              </div>
+              <div class="detail" id="detail-a-client">
+                <h3>03 · Create data client</h3>
+                <p>
+                  The server creates the runtime data client used by publisher/data repositories.
+                  PostgreSQL is wired separately for conversations and checkpoints.
+                </p>
+                <div class="why">
+                  These are shared process clients, not new clients for each model call.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/server.ts:21:1"
+                  >Client wiring · server.ts:21</a
+                >
+              </div>
+              <div class="detail" id="detail-a-auth">
+                <h3>04 · Build authorization</h3>
+                <p>
+                  The server constructs the identity repository and authorization resolver, then
+                  injects them into the route/service graph.
+                </p>
+                <div class="why">
+                  Construction happens at startup; a user's cookie and publisher membership are
+                  checked when a request arrives.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/server.ts:22:1"
+                  >Auth wiring · server.ts:22</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/auth/authorization.ts:15:1"
+                  >Auth implementation · authorization.ts:15</a
+                >
+              </div>
+              <div class="detail" id="detail-a-runtime">
+                <h3>05 · Assemble runtime capabilities</h3>
+                <p>
+                  Runtime data selects repositories and prepares the supported tool capabilities.
+                </p>
+                <div class="why">
+                  This defines which tools the agent can use; no tool executes during startup.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/domain/runtime-data.ts:45:1"
+                  >Runtime data factory · runtime-data.ts:45</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/tools/registry.ts:16:1"
+                  >Tool registry · registry.ts:16</a
+                >
+              </div>
+              <div class="detail" id="detail-a-repo">
+                <h3>06 · Conversation repository</h3>
+                <p>
+                  ConversationRepository is wired to PostgreSQL. Its methods later create turns,
+                  claim leases, and persist results.
+                </p>
+                <div class="why">
+                  Creating the JS repository object does not create tables; provisioning happened in
+                  postgres:init.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:10:1"
+                  >Repository · conversations.ts:10</a
+                >
+              </div>
+              <div class="detail" id="detail-a-model">
+                <h3>07 · Model runner</h3>
+                <p>
+                  The startup code creates a callable model runner. Its network request happens only
+                  when the graph calls it.
+                </p>
+                <div class="why">No LLM completion is generated during server startup.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/model.ts:43:1"
+                  >Runner · model.ts:43</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/server.ts:29:1"
+                  >Wiring · server.ts:29</a
+                >
+              </div>
+              <div class="detail" id="detail-a-service">
+                <h3>08 · Construct AgentService</h3>
+                <p>
+                  The service constructs a dedicated checkpoint pool and PostgresSaver. It does not
+                  build the turn's graph yet.
+                </p>
+                <div class="why">
+                  The fenced saver wrapper and graph are created when a turn executes.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:37:1"
+                  >Constructor · service.ts:37</a
+                >
+              </div>
+              <div class="detail" id="detail-a-app">
+                <h3>09 · Build app and register routes</h3>
+                <p>
+                  Fastify app setup installs common request hooks and registers product endpoints,
+                  including conversation routes.
+                </p>
+                <div class="why">
+                  Route registration maps URL/method to handler code; no user request has run yet.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/app.ts:26:1"
+                  >App setup · app.ts:26</a
+                >
+              </div>
+              <div class="detail" id="detail-a-listen">
+                <h3>10 · Listen</h3>
+                <p>
+                  The server binds its HTTP port. It can now receive the browser's
+                  create-conversation and turn requests.
+                </p>
+                <div class="why">This is the handoff from one-time setup to per-request work.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/server.ts:69:1"
+                  >Listen · server.ts:69</a
+                >
+              </div>
+              <div class="detail" id="detail-a-ready">
+                <h3>Readiness probe</h3>
+                <p>
+                  The health endpoint checks configured stores/tables. It is a probe run by
+                  deployment or monitoring.
+                </p>
+                <div class="why">It checks prerequisites; it does not run migrations.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/routes/health.ts:7:1"
+                  >Health route · health.ts:7</a
+                >
+              </div>
+              <div class="tip">
+                Links target VS Code Remote WSL (Ubuntu). Click the box; Ctrl+click its code link.
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="scene" id="scene-b">
+          <div class="scene-grid">
+            <input class="pick" type="radio" name="pick-b" id="pick-b-default" checked /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-submit"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-conv" /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-requestid"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-streamturn" /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-hook"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-route" /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-prepare"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-lock" /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-sse"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-run" /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-checkpointer"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-graph" /><input
+              class="pick"
+              type="radio"
+              name="pick-b"
+              id="pick-b-state"
+            /><input class="pick" type="radio" name="pick-b" id="pick-b-invoke" />
+            <div class="diagram">
+              <div class="stage" style="aspect-ratio: 1050/550">
+                <svg viewBox="0 0 1050 550" role="img" aria-label="First message request path">
+                  <defs>
+                    <marker
+                      id="arrow-b"
+                      viewBox="0 0 10 10"
+                      refX="8"
+                      refY="5"
+                      markerWidth="7"
+                      markerHeight="7"
+                      orient="auto"
+                    >
+                      <path d="M0 0L10 5L0 10z" fill="#84978c" />
+                    </marker>
+                  </defs>
+                  <text x="20" y="28" class="lane">WEB UI · FIRST MESSAGE</text>
+                  <path
+                    class="edge"
+                    marker-end="url(#arrow-b)"
+                    d="M169 112H190M339 112H360M509 112H530M679 112H700"
+                  />
+                  <g class="node" tabindex="0">
+                    <rect x="20" y="62" width="149" height="100" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="33" y="84" class="step">01 · CLICK SEND</text>
+                    <text x="33" y="112" class="title">investigate()</text>
+                    <text x="33" y="136" class="copy">Chat.tsx</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="190" y="62" width="149" height="100" fill="#f3ead8" stroke="#d8c69f" />
+                    <text x="203" y="84" class="step">02 · IF NO CHAT</text>
+                    <text x="203" y="112" class="title">Create chat</text>
+                    <text x="203" y="136" class="copy">POST /conversations</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="360" y="62" width="149" height="100" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="373" y="84" class="step">03 · RETRY KEY</text>
+                    <text x="373" y="112" class="title">requestId</text>
+                    <text x="373" y="136" class="copy">reuse on retry</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="530" y="62" width="149" height="100" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="543" y="84" class="step">04 · POST TURN</text>
+                    <text x="543" y="112" class="title">streamTurn()</text>
+                    <text x="543" y="136" class="copy">message + requestId</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="700" y="62" width="149" height="100" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="713" y="84" class="step">05 · FASTIFY</text>
+                    <text x="713" y="112" class="title">preHandler</text>
+                    <text x="713" y="136" class="copy">origin + JSON</text>
+                  </g>
+                  <text x="20" y="210" class="lane">API · POST /api/conversations/:id/turns</text>
+                  <path
+                    class="edge"
+                    marker-end="url(#arrow-b)"
+                    d="M775 162V268M700 316H679M530 316H509M360 316H339M190 316H169"
+                  />
+                  <g class="node" tabindex="0">
+                    <rect
+                      x="700"
+                      y="268"
+                      width="149"
+                      height="100"
+                      fill="#e5edf4"
+                      stroke="#b3c7d7"
+                    />
+                    <text x="713" y="290" class="step">06 · ROUTE</text>
+                    <text x="713" y="318" class="title">auth + validate</text>
+                    <text x="713" y="342" class="copy">cookie, IDs, body</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect
+                      x="530"
+                      y="268"
+                      width="149"
+                      height="100"
+                      fill="#dcece5"
+                      stroke="#aacbb9"
+                    />
+                    <text x="543" y="290" class="step">07 · SERVICE</text>
+                    <text x="543" y="318" class="title">prepare()</text>
+                    <text x="543" y="342" class="copy">accept turn</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect
+                      x="360"
+                      y="268"
+                      width="149"
+                      height="100"
+                      fill="#f3ead8"
+                      stroke="#d8c69f"
+                    />
+                    <text x="373" y="290" class="step">08 · SQL TX</text>
+                    <text x="373" y="318" class="title">lock + lease</text>
+                    <text x="373" y="342" class="copy">dedupe + owner</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect
+                      x="190"
+                      y="268"
+                      width="149"
+                      height="100"
+                      fill="#eee6ef"
+                      stroke="#cbb7ce"
+                    />
+                    <text x="203" y="290" class="step">09 · ROUTE</text>
+                    <text x="203" y="318" class="title">open SSE</text>
+                    <text x="203" y="342" class="copy">then run service</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="20" y="268" width="149" height="100" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="33" y="290" class="step">10 · SERVICE</text>
+                    <text x="33" y="318" class="title">run → execute</text>
+                    <text x="33" y="342" class="copy">guard + graph</text>
+                  </g>
+                  <path
+                    class="edge"
+                    marker-end="url(#arrow-b)"
+                    d="M95 368V425H190M339 475H360M509 475H530M679 475H700"
+                  />
+                  <text x="20" y="414" class="lane">PER-TURN GRAPH SETUP · DETAILS IN TAB C</text>
+                  <g class="node" tabindex="0">
+                    <rect x="190" y="430" width="149" height="90" fill="#f3ead8" stroke="#d8c69f" />
+                    <text x="203" y="452" class="step">11 · CHECKPOINTER</text>
+                    <text x="203" y="480" class="title">fenced saver</text>
+                    <text x="203" y="502" class="copy">lease-checked writes</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="360" y="430" width="149" height="90" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="373" y="452" class="step">12 · COMPILE GRAPH</text>
+                    <text x="373" y="480" class="title">model / tool</text>
+                    <text x="373" y="502" class="copy">buildAgentGraph()</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="530" y="430" width="149" height="90" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="543" y="452" class="step">13 · INPUT</text>
+                    <text x="543" y="480" class="title">initialState</text>
+                    <text x="543" y="502" class="copy">system + history + user</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="700" y="430" width="149" height="90" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="713" y="452" class="step">14 · START GRAPH</text>
+                    <text x="713" y="480" class="title">invoke()</text>
+                    <text x="713" y="502" class="copy">durability: sync</text>
+                  </g>
+                </svg>
+                <div class="hotspots">
+                  <label
+                    class="hotspot"
+                    for="pick-b-submit"
+                    aria-label="Select diagram block"
+                    style="left: 1.9048%; top: 11.2728%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-conv"
+                    aria-label="Select diagram block"
+                    style="left: 18.0952%; top: 11.2728%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-requestid"
+                    aria-label="Select diagram block"
+                    style="left: 34.2857%; top: 11.2728%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-streamturn"
+                    aria-label="Select diagram block"
+                    style="left: 50.4762%; top: 11.2728%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-hook"
+                    aria-label="Select diagram block"
+                    style="left: 66.6667%; top: 11.2728%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-route"
+                    aria-label="Select diagram block"
+                    style="left: 66.6667%; top: 48.7273%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-prepare"
+                    aria-label="Select diagram block"
+                    style="left: 50.4762%; top: 48.7273%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-lock"
+                    aria-label="Select diagram block"
+                    style="left: 34.2857%; top: 48.7273%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-sse"
+                    aria-label="Select diagram block"
+                    style="left: 18.0952%; top: 48.7273%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-run"
+                    aria-label="Select diagram block"
+                    style="left: 1.9048%; top: 48.7273%; width: 14.1905%; height: 18.1818%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-checkpointer"
+                    aria-label="Select diagram block"
+                    style="left: 18.0952%; top: 78.1818%; width: 14.1905%; height: 16.3637%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-graph"
+                    aria-label="Select diagram block"
+                    style="left: 34.2857%; top: 78.1818%; width: 14.1905%; height: 16.3637%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-state"
+                    aria-label="Select diagram block"
+                    style="left: 50.4762%; top: 78.1818%; width: 14.1905%; height: 16.3637%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-b-invoke"
+                    aria-label="Select diagram block"
+                    style="left: 66.6667%; top: 78.1818%; width: 14.1905%; height: 16.3637%"
+                  ></label>
+                </div>
+              </div>
+            </div>
+            <aside class="sidebar">
+              <h2>Step details · B</h2>
+              <div class="detail default" id="detail-b-default">
+                <h3>The first turn path</h3>
+                <p>
+                  The first frontend function is Chat.investigate(). If needed, the UI creates a
+                  conversation, then POSTs a turn to the API. The server accepts/claims it before
+                  running the graph.
+                </p>
+                <div class="why">
+                  Click 01, then follow arrows in numeric order. Each box links to the source
+                  location.
+                </div>
+              </div>
+              <div class="detail" id="detail-b-submit">
+                <h3>01 · Chat.investigate()</h3>
+                <p>
+                  The UI handles submit: prevents overlap, trims/checks the text, and prepares
+                  conversation/request information.
+                </p>
+                <div class="why">
+                  This is the first application function reached for a submitted message.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/web/src/Chat.tsx:273:1"
+                  >investigate() · Chat.tsx:273</a
+                >
+              </div>
+              <div class="detail" id="detail-b-conv">
+                <h3>02 · Create conversation if absent</h3>
+                <p>
+                  For a new chat, the UI POSTs /api/conversations. The API creates the conversation
+                  and independent LangGraph thread ID.
+                </p>
+                <div class="why">This request occurs before POSTing the first message/turn.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/web/src/Chat.tsx:296:1"
+                  >UI create · Chat.tsx:296</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/routes/conversations.ts:35:1"
+                  >Create route · conversations.ts:35</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:20:1"
+                  >Repository create · conversations.ts:20</a
+                >
+              </div>
+              <div class="detail" id="detail-b-requestid">
+                <h3>03 · Keep a retry key</h3>
+                <p>
+                  The UI creates/stores a requestId for the message. A retry for that pending
+                  message can reuse it.
+                </p>
+                <div class="why">
+                  The backend uses the key to find a previously accepted turn instead of duplicating
+                  it.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/web/src/Chat.tsx:306:1"
+                  >Pending request ID · Chat.tsx:306</a
+                >
+              </div>
+              <div class="detail" id="detail-b-streamturn">
+                <h3>04 · POST the turn</h3>
+                <p>
+                  streamTurn sends POST /api/conversations/{id}/turns with the message and
+                  requestId, then parses SSE events from the response.
+                </p>
+                <div class="why">
+                  The browser does not call the model directly; it talks to the API.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/web/src/Chat.tsx:321:1"
+                  >Call streamTurn · Chat.tsx:321</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/web/src/api.ts:60:1"
+                  >streamTurn helper · api.ts:60</a
+                >
+              </div>
+              <div class="detail" id="detail-b-hook">
+                <h3>05 · Fastify preHandler</h3>
+                <p>
+                  Common app hooks run before route handlers. Mutating requests must pass
+                  origin/content-type protections.
+                </p>
+                <div class="why">
+                  This is request-integrity protection, separate from user authentication.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/app.ts:42:1"
+                  >preHandler · app.ts:42</a
+                >
+              </div>
+              <div class="detail" id="detail-b-route">
+                <h3>06 · Conversation turn route</h3>
+                <p>
+                  The route extracts IDs, resolves the user, validates the request body, and calls
+                  AgentService.prepare().
+                </p>
+                <div class="why">
+                  Invalid auth, IDs, or body stop the request before model execution.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/routes/conversations.ts:57:1"
+                  >Turn handler · conversations.ts:57</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/auth/authorization.ts:31:1"
+                  >Resolve user · authorization.ts:31</a
+                >
+              </div>
+              <div class="detail" id="detail-b-prepare">
+                <h3>07 · AgentService.prepare()</h3>
+                <p>
+                  For a new turn, prepare delegates to ConversationRepository.accept(). Resume
+                  additionally validates saved graph state.
+                </p>
+                <div class="why">prepare claims/accepts the turn; it does not call the LLM.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:65:1"
+                  >prepare() · service.ts:65</a
+                >
+              </div>
+              <div class="detail" id="detail-b-lock">
+                <h3>08 · Transaction, row lock, lease</h3>
+                <p>
+                  accept() locks the conversation row inside a short SQL transaction, handles
+                  duplicate request IDs/active turns, creates the turn, and claims a lease
+                  generation.
+                </p>
+                <div class="why">
+                  The SQL row lock is released at transaction end. The lease generation fences stale
+                  runs between transactions; no lock is held during model calls.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:232:1"
+                  >accept() · conversations.ts:232</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:323:1"
+                  >assert lease · conversations.ts:323</a
+                >
+              </div>
+              <div class="detail" id="detail-b-sse">
+                <h3>09 · Open SSE then run</h3>
+                <p>
+                  The route returns JSON for duplicate requests. Otherwise it opens an SSE response,
+                  emits turn-start, and calls service.run().
+                </p>
+                <div class="why">
+                  Disconnecting the browser stream alone does not cancel backend work.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/routes/conversations.ts:70:1"
+                  >SSE handler · conversations.ts:70</a
+                >
+              </div>
+              <div class="detail" id="detail-b-run">
+                <h3>10 · AgentService.run → execute</h3>
+                <p>
+                  run() adds tracing around execute(). execute() installs abort/deadline and
+                  auth/lease guards.
+                </p>
+                <div class="why">
+                  This is where the accepted turn becomes an executing agent run.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:101:1"
+                  >run() · service.ts:101</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:128:1"
+                  >execute() · service.ts:128</a
+                >
+              </div>
+              <div class="detail" id="detail-b-checkpointer">
+                <h3>11 · Create fenced checkpoint saver</h3>
+                <p>
+                  Per execution, the service wraps the shared PostgresSaver with a fence tied to
+                  this turn's lease.
+                </p>
+                <div class="why">Checkpoint writes must still belong to the active run.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/checkpointer.ts:4:1"
+                  >FencedPostgresSaver · checkpointer.ts:4</a
+                >
+              </div>
+              <div class="detail" id="detail-b-graph">
+                <h3>12 · Build the graph</h3>
+                <p>
+                  buildAgentGraph wires model, tool execution, guard, saved tool results, and event
+                  callbacks into nodes/edges.
+                </p>
+                <div class="why">
+                  The compiled per-turn graph contains control flow, not credentials.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/graph.ts:34:1"
+                  >buildAgentGraph · graph.ts:34</a
+                >
+              </div>
+              <div class="detail" id="detail-b-state">
+                <h3>13 · Create initial state</h3>
+                <p>
+                  The new graph state contains turn ID and messages: system prompt, recent
+                  conversation context, and current user message.
+                </p>
+                <div class="why">
+                  On resume, state comes from the checkpoint instead of a fresh initial state.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/state.ts:16:1"
+                  >Graph state · state.ts:16</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:211:1"
+                  >Build input · service.ts:211</a
+                >
+              </div>
+              <div class="detail" id="detail-b-invoke">
+                <h3>14 · graph.invoke()</h3>
+                <p>
+                  The service calls LangGraph with initial state, thread config, and synchronous
+                  durability. Control passes to the model node.
+                </p>
+                <div class="why">The thread ID selects this conversation's checkpoint history.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:230:1"
+                  >Invoke · service.ts:230</a
+                >
+              </div>
+              <div class="tip">
+                Click a numbered box to replace this explanation. Source links open at their cited
+                line.
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="scene" id="scene-c">
+          <div class="scene-grid">
+            <input class="pick" type="radio" name="pick-c" id="pick-c-default" checked /><input
+              class="pick"
+              type="radio"
+              name="pick-c"
+              id="pick-c-invoke"
+            /><input class="pick" type="radio" name="pick-c" id="pick-c-model" /><input
+              class="pick"
+              type="radio"
+              name="pick-c"
+              id="pick-c-tool"
+            /><input class="pick" type="radio" name="pick-c" id="pick-c-final" /><input
+              class="pick"
+              type="radio"
+              name="pick-c"
+              id="pick-c-checkpoint"
+            /><input class="pick" type="radio" name="pick-c" id="pick-c-toolresult" /><input
+              class="pick"
+              type="radio"
+              name="pick-c"
+              id="pick-c-finish"
+            />
+            <div class="diagram">
+              <div class="stage" style="aspect-ratio: 1050/520">
+                <svg
+                  viewBox="0 0 1050 520"
+                  role="img"
+                  aria-label="Agent graph execution and persistence"
+                >
+                  <defs>
+                    <marker
+                      id="arrow-c"
+                      viewBox="0 0 10 10"
+                      refX="8"
+                      refY="5"
+                      markerWidth="7"
+                      markerHeight="7"
+                      orient="auto"
+                    >
+                      <path d="M0 0L10 5L0 10z" fill="#84978c" />
+                    </marker>
+                  </defs>
+                  <text x="20" y="28" class="lane">
+                    LANGGRAPH · PER-TURN EXECUTION · THREAD ID SELECTS CHECKPOINTS
+                  </text>
+                  <rect class="group" x="300" y="50" width="420" height="315" />
+                  <text x="321" y="76" class="step">MODEL / TOOL CONTROL LOOP</text>
+                  <path class="edge" marker-end="url(#arrow-c)" d="M510 142V169M510 247V277" />
+                  <path
+                    class="edge dash"
+                    marker-end="url(#arrow-c)"
+                    d="M652 207C697 207 697 119 652 119"
+                  />
+                  <path class="edge" marker-end="url(#arrow-c)" d="M510 331V386" />
+                  <text x="661" y="164" class="copy">tool result → model</text>
+                  <text x="523" y="267" class="copy">no calls → finish</text>
+                  <g class="node" tabindex="0">
+                    <rect x="365" y="94" width="290" height="48" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="381" y="115" class="step">01 · INVOKE</text>
+                    <text x="381" y="134" class="title">Initial state + thread config</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="365" y="169" width="290" height="78" fill="#dcece5" stroke="#aacbb9" />
+                    <text x="381" y="190" class="step">02 · MODEL NODE</text>
+                    <text x="381" y="216" class="title">guard → budget → model call</text>
+                    <text x="381" y="235" class="copy">answer or enqueue tool call(s)</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="365" y="277" width="290" height="54" fill="#e5edf4" stroke="#b3c7d7" />
+                    <text x="381" y="298" class="step">03 · TOOL NODE</text>
+                    <text x="381" y="321" class="title">load saved result or dispatch</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="365" y="386" width="290" height="54" fill="#eee6ef" stroke="#cbb7ce" />
+                    <text x="381" y="407" class="step">04 · FINALIZE</text>
+                    <text x="381" y="430" class="title">validate answer → END</text>
+                  </g>
+                  <g class="node" tabindex="0">
+                    <rect x="20" y="160" width="230" height="100" fill="#f3ead8" stroke="#d8c69f" />
+                    <text x="36" y="183" class="step">PERSISTENCE A</text>
+                    <text x="36" y="210" class="title">LangGraph checkpoint</text>
+                    <text x="36" y="234" class="copy">graph state + position</text>
+                    <text x="36" y="251" class="copy">fenced writes</text>
+                  </g>
+                  <path class="edge dash" marker-end="url(#arrow-c)" d="M365 119H250M250 230H365" />
+                  <g class="node" tabindex="0">
+                    <rect
+                      x="770"
+                      y="160"
+                      width="250"
+                      height="100"
+                      fill="#e5edf4"
+                      stroke="#b3c7d7"
+                    />
+                    <text x="786" y="183" class="step">PERSISTENCE B</text>
+                    <text x="786" y="210" class="title">tool_executions</text>
+                    <text x="786" y="234" class="copy">completed tool result</text>
+                    <text x="786" y="251" class="copy">saved separately</text>
+                  </g>
+                  <path class="edge dash" marker-end="url(#arrow-c)" d="M655 304H770" />
+                  <g class="node" tabindex="0">
+                    <rect x="190" y="463" width="660" height="52" fill="#fffefa" stroke="#9fb5a6" />
+                    <text x="210" y="484" class="step">AFTER GRAPH END · PERSISTENCE C</text>
+                    <text x="210" y="505" class="title">
+                      conversation turn status/output → SSE completion event
+                    </text>
+                  </g>
+                  <path class="edge" marker-end="url(#arrow-c)" d="M510 440V463" />
+                </svg>
+                <div class="hotspots">
+                  <label
+                    class="hotspot"
+                    for="pick-c-invoke"
+                    aria-label="Select diagram block"
+                    style="left: 34.7619%; top: 18.0769%; width: 27.619%; height: 9.2308%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-c-model"
+                    aria-label="Select diagram block"
+                    style="left: 34.7619%; top: 32.5%; width: 27.619%; height: 15%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-c-tool"
+                    aria-label="Select diagram block"
+                    style="left: 34.7619%; top: 53.2692%; width: 27.619%; height: 10.3846%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-c-final"
+                    aria-label="Select diagram block"
+                    style="left: 34.7619%; top: 74.2308%; width: 27.619%; height: 10.3846%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-c-checkpoint"
+                    aria-label="Select diagram block"
+                    style="left: 1.9048%; top: 30.7692%; width: 21.9048%; height: 19.2308%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-c-toolresult"
+                    aria-label="Select diagram block"
+                    style="left: 73.3333%; top: 30.7692%; width: 23.8095%; height: 19.2308%"
+                  ></label
+                  ><label
+                    class="hotspot"
+                    for="pick-c-finish"
+                    aria-label="Select diagram block"
+                    style="left: 18.0952%; top: 89.0385%; width: 62.8571%; height: 10%"
+                  ></label>
+                </div>
+              </div>
+            </div>
+            <aside class="sidebar">
+              <h2>Step details · C</h2>
+              <div class="detail default" id="detail-c-default">
+                <h3>The graph does not run once</h3>
+                <p>
+                  It cycles model → tool → model until the model stops requesting tools. Then the
+                  graph finalizes; the service persists the final turn.
+                </p>
+                <div class="why">
+                  Three kinds of persistence are shown separately: checkpoint, completed tool
+                  result, and user-facing conversation turn.
+                </div>
+              </div>
+              <div class="detail" id="detail-c-invoke">
+                <h3>01 · Invoke</h3>
+                <p>
+                  LangGraph begins with the new state and config. The conversation thread_id
+                  identifies its checkpoint stream.
+                </p>
+                <div class="why">Sync durability saves graph progress as it advances.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:230:1"
+                  >invoke · service.ts:230</a
+                >
+              </div>
+              <div class="detail" id="detail-c-model">
+                <h3>02 · Model node</h3>
+                <p>
+                  Check guard, reserve a model attempt, stream model output, append assistant
+                  message, and queue any tool calls.
+                </p>
+                <div class="why">
+                  No tool calls route to finalization. Calls route to the tool node.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/graph.ts:41:1"
+                  >model node · graph.ts:41</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/model.ts:43:1"
+                  >model stream · model.ts:43</a
+                >
+              </div>
+              <div class="detail" id="detail-c-tool">
+                <h3>03 · Tool node</h3>
+                <p>
+                  Take one pending call. Reuse a saved matching result or validate and dispatch the
+                  allowlisted tool. Save result, evidence, and tool message to graph state.
+                </p>
+                <div class="why">
+                  After pending calls are handled, the graph goes back to the model with their
+                  results.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/graph.ts:62:1"
+                  >tool node · graph.ts:62</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/tools/dispatch.ts:19:1"
+                  >dispatcher · dispatch.ts:19</a
+                >
+              </div>
+              <div class="detail" id="detail-c-final">
+                <h3>04 · Finalize</h3>
+                <p>
+                  Require a non-empty answer, validate evidence/citations, mark state done, and
+                  return graph result.
+                </p>
+                <div class="why">Service then updates the app-facing conversation/turn record.</div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/graph.ts:177:1"
+                  >finalize node · graph.ts:177</a
+                >
+              </div>
+              <div class="detail" id="detail-c-checkpoint">
+                <h3>Persistence A · Graph checkpoint</h3>
+                <p>
+                  PostgresSaver stores graph state. FencedPostgresSaver checks the active lease
+                  around checkpoint writes.
+                </p>
+                <div class="why">
+                  Checkpoint = where graph progress was. Not the same as the displayed conversation.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/checkpointer.ts:4:1"
+                  >Fenced saver · checkpointer.ts:4</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/state.ts:16:1"
+                  >State fields · state.ts:16</a
+                >
+              </div>
+              <div class="detail" id="detail-c-toolresult">
+                <h3>Persistence B · Tool result</h3>
+                <p>
+                  Completed tool outputs are also saved in app SQL so resume can reuse a completed
+                  call.
+                </p>
+                <div class="why">
+                  This reduces replay but does not guarantee exactly-once execution for in-flight
+                  work.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:410:1"
+                  >Load saved result · conversations.ts:410</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:444:1"
+                  >Save result · conversations.ts:444</a
+                >
+              </div>
+              <div class="detail" id="detail-c-finish">
+                <h3>Persistence C · User-facing turn</h3>
+                <p>
+                  After graph end, the service saves terminal status and answer to the turn, then
+                  emits completion to SSE.
+                </p>
+                <div class="why">
+                  Conversation record = what product surfaces. Checkpoint = internal execution
+                  state.
+                </div>
+                <h4>Source</h4>
+                <a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/db/conversations.ts:496:1"
+                  >finish turn · conversations.ts:496</a
+                ><a
+                  href="vscode://vscode-remote/wsl+Ubuntu/home/shashank/personal/bid-ai/apps/api/src/agent/service.ts:239:1"
+                  >service finish · service.ts:239</a
+                >
+              </div>
+              <div class="tip">
+                On resume: verify turn/checkpoint → claim a fresh lease → invoke from saved state.
+                It is not exactly-once execution.
+              </div>
+            </aside>
+          </div>
+        </section>
+      </div>
+    </div>
+    <footer>
+      Uses native radio tabs and SVG anchor links; no JavaScript is required for diagrams or
+      descriptions. Source links target the Ubuntu WSL workspace.
+    </footer>
+  </body>
+</html>

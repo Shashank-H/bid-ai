@@ -74,6 +74,7 @@ export function buildApp(
           error: errorDiagnostics(error, [
             process.env['LLM_API_KEY'] ?? '',
             process.env['LANGFUSE_SECRET_KEY'] ?? '',
+            process.env['DECISION_MODEL_API_KEY'] ?? '',
           ]),
         },
         'Request failed',

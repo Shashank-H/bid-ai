@@ -19,6 +19,8 @@ import { reportFailure } from '../observability/diagnostics.js';
 import { fixtureDatasetMetadata } from '../domain/runtime-data.js';
 import type { RuntimeDataDependencies } from '../domain/runtime-data.js';
 import { dispatchTool } from '../tools/dispatch.js';
+import { decisionRunner } from './decision-model.js';
+import type { DecisionRunner } from './decision-model.js';
 
 export type AcceptedTurn = Awaited<ReturnType<ConversationRepository['accept']>>;
 export type ModelContext = {
@@ -49,6 +51,7 @@ export class AgentService {
     private readonly tracing: TracingRuntime,
     private readonly settings = readAgentSettings(),
     private readonly runtimeData: Partial<RuntimeDataDependencies> = {},
+    private readonly decision: DecisionRunner = decisionRunner(process.env),
   ) {
     this.saverPool = new pg.Pool({
       connectionString: conversations.postgres.pool.options.connectionString,
@@ -161,6 +164,15 @@ export class AgentService {
       );
       const graph = buildAgentGraph(saver, {
         context,
+        decision: (input, signal) =>
+          this.tracing.decision(
+            {
+              stage: input.stage,
+              allowConfiguration: input.allowConfiguration,
+              permittedRoutes: input.state['permittedRoutes'],
+            },
+            () => this.decision(input, signal),
+          ),
         dispatchTool: this.runtimeData.dispatchTool ?? dispatchTool,
         tracing: this.tracing,
         guard,
@@ -190,15 +202,22 @@ export class AgentService {
           if (!state.answer.trim())
             throw new HttpError(502, 'MODEL_INCOMPATIBLE', 'The model returned no visible answer.');
           validateAnswer(state);
+          if (state.responseMode !== 'investigate') {
+            visible = state.answer;
+            emit({ ...fields, type: 'text-delta', text: state.answer });
+          }
         },
         model: (state) => {
-          visible = '';
-          emit({ ...fields, type: 'text-reset' });
+          if (state.specialist === 'response') {
+            visible = '';
+            emit({ ...fields, type: 'text-reset' });
+          }
 
           return this.model(
             state,
             controller.signal,
             (text) => {
+              if (state.specialist !== 'response') return;
               visible += text;
               for (let offset = 0; offset < text.length; offset += 16_384) {
                 emit({ ...fields, type: 'text-delta', text: text.slice(offset, offset + 16_384) });
@@ -286,7 +305,11 @@ export class AgentService {
           'turn_projection_failed',
           { ...fields, publisherId: identity.publisherId },
           projectionError,
-          [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? ''],
+          [
+            process.env['LLM_API_KEY'] ?? '',
+            process.env['LANGFUSE_SECRET_KEY'] ?? '',
+            process.env['DECISION_MODEL_API_KEY'] ?? '',
+          ],
         );
       }
 
@@ -310,7 +333,11 @@ export class AgentService {
           'investigation_failed',
           { ...fields, publisherId: identity.publisherId, traceId: this.tracing.traceId },
           failure,
-          [process.env['LLM_API_KEY'] ?? '', process.env['LANGFUSE_SECRET_KEY'] ?? ''],
+          [
+            process.env['LLM_API_KEY'] ?? '',
+            process.env['LANGFUSE_SECRET_KEY'] ?? '',
+            process.env['DECISION_MODEL_API_KEY'] ?? '',
+          ],
         );
 
       emit(
