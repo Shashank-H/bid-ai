@@ -19,7 +19,7 @@ import { reportFailure } from '../observability/diagnostics.js';
 import { fixtureDatasetMetadata } from '../domain/runtime-data.js';
 import type { RuntimeDataDependencies } from '../domain/runtime-data.js';
 import { dispatchTool } from '../tools/dispatch.js';
-import { decisionRunner } from './decision-model.js';
+import { decisionPrompt, decisionRunner } from './decision-model.js';
 import type { DecisionRunner } from './decision-model.js';
 
 export type AcceptedTurn = Awaited<ReturnType<ConversationRepository['accept']>>;
@@ -169,7 +169,7 @@ export class AgentService {
             {
               stage: input.stage,
               allowConfiguration: input.allowConfiguration,
-              permittedRoutes: input.state['permittedRoutes'],
+              prompt: decisionPrompt(input),
             },
             () => this.decision(input, signal),
           ),
