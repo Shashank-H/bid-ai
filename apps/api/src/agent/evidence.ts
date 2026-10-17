@@ -1,6 +1,13 @@
 import type { State } from './state.js';
 import { HttpError } from '../errors.js';
 
+export const FIXED_RESPONSES = {
+  out_of_scope:
+    'I can help investigate publisher auction performance and assist with publisher configurations. Please ask a question within that scope.',
+  clarify:
+    'Would you like me to investigate publisher performance or help with a particular configuration setting or change?',
+} as const;
+
 export const INSUFFICIENT_EVIDENCE =
   'Insufficient evidence: No authorized observations were retrieved for this investigation.';
 
@@ -13,6 +20,15 @@ function citationIds(text: string): string[] {
 export function validateAnswer(state: State): void {
   const ids = new Set(state.evidence.map((entry) => entry.evidenceId));
   const text = state.answer.trim();
+
+  if (state.responseMode === 'out_of_scope' || state.responseMode === 'clarify') {
+    const decision = state.decisions?.at(-1);
+    if (text !== FIXED_RESPONSES[state.responseMode] || decision?.route !== state.responseMode) {
+      throw new HttpError(502, 'EVIDENCE_INVALID', 'The fixed scope response was not validated.');
+    }
+
+    return;
+  }
 
   if (!ids.size) {
     if (text !== INSUFFICIENT_EVIDENCE)

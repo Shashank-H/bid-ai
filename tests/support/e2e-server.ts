@@ -14,6 +14,7 @@ import { AgentService } from '../../apps/api/dist/agent/service.js';
 import { createRuntimeData } from '../../apps/api/dist/domain/runtime-data.js';
 import { PublisherDataRepository } from '../../apps/api/dist/db/publisher-data.js';
 import { modelRunner } from '../../apps/api/dist/agent/model.js';
+import { decisionRunner } from '../../apps/api/dist/agent/decision-model.js';
 import { initializeTracing } from '../../apps/api/dist/observability/tracing.js';
 import { startModelServer } from './model-server.ts';
 
@@ -118,6 +119,13 @@ const service = new AgentService(
   tracing,
   undefined,
   runtime,
+  decisionRunner({
+    ...env,
+    NODE_ENV: 'test',
+    DECISION_MODEL_ENDPOINT: `${model.url}/systemone`,
+    DECISION_MODEL_API_KEY: 'BROWSER_DECISION_KEY_SENTINEL',
+    DECISION_MODEL_TIMEOUT_MS: '200',
+  }),
 );
 const app = buildApp({ checkReady: () => conversations.assertReady() }, false, {
   authorization,
@@ -127,6 +135,11 @@ const app = buildApp({ checkReady: () => conversations.assertReady() }, false, {
   dashboard: runtime.dashboard,
   configurations: runtime.configurations,
 });
+// This route exists only in the isolated browser fixture, never the serving application.
+app.get('/api/test/model-stats', async () => ({
+  requests: model.requests,
+  decisionRequests: model.decisionRequests,
+}));
 let closing = false;
 
 async function close() {

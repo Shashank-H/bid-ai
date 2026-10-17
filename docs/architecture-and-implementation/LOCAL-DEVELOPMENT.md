@@ -2,7 +2,7 @@
 
 ## Runtime and prerequisites
 
-Use Docker with a recent Compose plugin (`docker compose`). Initial builds require internet access for public container images, pinned pnpm packages and Chromium binaries. No host Node, pnpm, AWS credentials or cloud account is required. Health/login do not contact a model. Investigations default to host Ollama with `qwen3.5:9b`, using a non-secret SDK key placeholder. Blank/missing demo model/auth/password settings use checked-in demo defaults; explicit nonblank overrides still work. Compose loads model overrides from `.env` via `env_file` rather than inheriting host-shell `LLM_*` values, preventing host-local `localhost` URLs from replacing Docker addressing.
+Use Docker with a recent Compose plugin (`docker compose`). Initial builds require internet access for public container images, pinned pnpm packages and Chromium binaries. No host Node, pnpm or AWS credentials are required. Chat requires a privately configured decision-model API key; foundation startup, health and login do not contact either model. The specialist LLM defaults to host Ollama with `qwen3.5:9b`, using a non-secret SDK key placeholder. Decision-model credentials are separate and read lazily for chat. Blank/missing demo model/auth/password settings use checked-in demo defaults; explicit nonblank overrides still work. Compose loads model overrides from `.env` via `env_file` rather than inheriting host-shell `LLM_*` values, preventing host-local `localhost` URLs from replacing Docker addressing.
 
 The repository has three workspaces:
 
@@ -19,6 +19,7 @@ From the repository root, copy `.env.example` once for initial setup; preserve a
 ```sh
 cp .env.example .env
 # Demo values are preconfigured; replace public passwords/signing key for shared deployments.
+# Privately set DECISION_MODEL_API_KEY before using chat.
 ollama pull qwen3.5:9b
 docker compose config --quiet
 docker compose build api web
@@ -57,6 +58,11 @@ Do not remove volumes as part of ordinary startup or shutdown. After source chan
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`                 | `http://host.docker.internal:11434/v1`, `ollama` (non-secret placeholder), `qwen3.5:9b`; explicit nonblank overrides supported   |
 | `LLM_TIMEOUT_MS`                                           | 110000; model/probe accepts 1000–120000; product also enforces the turn deadline                                                 |
 | `LLM_REASONING_EFFORT`, `LLM_TEMPERATURE`                  | Standard request options, default `none` / `0`, independently configurable for other models                                      |
+| `DECISION_MODEL_ENDPOINT`                                  | Full typed evaluation URL from environment, e.g. `https://api.typesafe.ai/v1/systemone`; not an OpenAI base URL                  |
+| `DECISION_MODEL_API_KEY`                                   | Blank in the example; required privately for chat, never exposed to the browser                                                  |
+| `DECISION_MODEL_NAME`                                      | `jev-latest`; independent of the specialist `LLM_MODEL`                                                                          |
+| `DECISION_MODEL_TIMEOUT_MS`                                | 5000; bounded by the remaining turn deadline                                                                                     |
+| `DECISION_MODEL_MIN_CONFIDENCE`                            | 0.5 initial routing floor, not a guarantee of factual accuracy                                                                   |
 | `AUTH_SIGNING_SECRET`, `DEMO_PASSWORD_A/B`                 | Public local-demo defaults matching DEMO-ACCOUNTS.md; replace for shared deployment                                              |
 
 Initialization provisions `<prefix>-identity`, `<prefix>-publisher-data`, and `<prefix>-workflow` without clearing existing data. Phase 3 reuses the publisher-data table for scoped configuration/history, dataset descriptors, auction records and derived metrics; no new table or index is required. `TABLE_PREFIX` selects the identity/workflow tables as well as analytics. The foundation identity TTL remains provisioned but is unused by authentication: **no sessions/token hashes are stored**. Init refuses incompatible existing keys/TTL and never silently deletes data to repair them.
@@ -117,6 +123,26 @@ docker compose run --rm --no-deps api node dist/commands/cli.js db:reset \
 
 If `TABLE_PREFIX` changed, replace both prefix occurrences. Missing confirmation, foreign prefixes and cloud endpoints fail before deletion. Reset does not delete the named volume or unrelated tables.
 
+## Internal graph and decision model
+
+On an existing installation, run `docker compose run --rm --no-deps api node dist/commands/cli.js postgres:init` with the rebuilt API image before starting the updated API. The additive `0003_decision_attempt_budgets` migration adds durable decision/specialist retry counters and preserves legacy model attempts as specialist attempts; it does not reset conversations or configurations.
+
+The user-facing chat/configuration flow is unchanged. Internally, a generic decision model gates request relevance/intent at entry and semantic specialist handoffs. **Read** gathers evidence with read-only tools; optional **Configuration** explains supported settings and prepares requested proposals; **Analysis/response** has no tools and writes the cited public answer. Private specialist handoffs are not streamed. Tool dispatch, publisher authorization and approval rules remain enforced by code, not by the decision model.
+
+JEV is configured through backend-only environment settings and called with its native typed HTTP API, not OpenAI Chat Completions:
+
+```dotenv
+DECISION_MODEL_ENDPOINT=https://api.typesafe.ai/v1/systemone
+DECISION_MODEL_API_KEY=
+DECISION_MODEL_NAME=jev-latest
+DECISION_MODEL_TIMEOUT_MS=5000
+DECISION_MODEL_MIN_CONFIDENCE=0.5
+```
+
+Set the key privately; the endpoint is the full evaluation URL and comes from environment configuration. The existing `LLM_*` settings still select the specialist language model. Decision settings are read lazily when agent work starts, so missing credentials do not block foundation startup, health or login. An unavailable provider or invalid decision fails closed: no ungated specialist fallback. Low-confidence ambiguity produces a concise clarification rather than guessing; a confidently unrelated request receives a scope explanation. The confidence threshold is an initial policy that needs representative-request validation.
+
+Configuration assistance still creates a review card only. A human chooses **Update draft** and separately **Publish**; neither a JEV decision nor a specialist can approve or publish. Explicit configuration navigation remains explicit. See [tracing](TRACING.md) for gate stages, resolved model, routes, confidence and usage.
+
 ## Model compatibility: initial Llama, later OpenAI
 
 The API uses the OpenAI SDK against a configurable OpenAI-compatible **Chat Completions** endpoint. Initial use is a Llama-based server; later OpenAI use should require only changing base URL/key/model. Configure `.env` privately, including `/v1` in `LLM_BASE_URL` if the provider requires it. An unauthenticated local server can use a nonempty dummy key if that server permits it.
@@ -161,18 +187,19 @@ The auction layout stores one uncompressed item per auction with detailed bidder
 - **Startup fails:** `docker compose ps --all` and `docker compose logs db-init api dynamodb`. Init errors block API startup; resolve configuration/schema mismatch rather than relying on automatic destructive repair. Logs are sanitized, but do not publish private environment files or interpolated Compose output.
 - **Unavailable status:** check API readiness and the three database tables; the web retries every 15 seconds and offers an explicit retry. If API was recreated with a new address, restart `web`.
 - **Port conflict:** adjust `WEB_PORT`/`API_PORT` in `.env` and recreate services. Defaults bind only to loopback.
+- **Chat decision gate fails:** check the private `DECISION_MODEL_*` settings and reachability of the full evaluation URL. Missing credentials, provider unavailability or invalid answers stop safely; the separate LLM compatibility probe does not verify JEV.
 - **Model probe fails:** check endpoint reachability from Docker, credentials, model name and provider streaming/function-call support. Codes distinguish authentication, network, unsupported tools/streaming, protocol, timeout and output-budget failures. Do not paste the real key into browser code or test fixtures.
 - **WSL credential-helper failure on public image pull:** this environment encountered `UtilAcceptVsock` from the user's Docker credential helper. An optional isolated config avoids changing your normal Docker configuration: create `/tmp/bid-docker-config/config.json` containing `{"auths":{}}`, then prefix commands with `DOCKER_CONFIG=/tmp/bid-docker-config`. This workaround uses unauthenticated public registry pulls; use your normal authenticated config when needed.
 
-## Read-only agent, authentication and recovery
+## Agent, authentication and recovery
 
 - The demo has a stable public `AUTH_SIGNING_SECRET` fallback; a configured nonblank secret overrides it. Replace it with a persistent random value of at least 32 bytes before sharing the application. `APP_ORIGIN` must exactly match the browser origin (update it if changing WEB_PORT).
 - Authentication is stateless signed cookies, not DB sessions. Every request rechecks the DynamoDB user's disabled flag and current single-publisher membership. Logout clears the cookie and cancels local active streams; a copied token remains valid until expiry. Rotating the signing secret invalidates all tokens. Local capped login throttling is single-process, not production abuse protection.
 - `POSTGRES_PASSWORD` defaults to a local-development-only value; optional `DATABASE_URL` overrides the internal connection. Application tables live in `public` with Drizzle migration tracking in `drizzle`; official LangGraph saver tables live in `agent_checkpoints`. Neither store contains authentication session records.
 - Fixture mode retains Publisher A January 1–14, 2026 and Publisher B February 1–14, 2026, UTC. Database mode uses persisted ready metadata and tools without fixture fallback. The ready Phase 3 dataset spans August 24–October 19, 2026 with exact timestamp bounds and partial boundary dates; the latest complete UTC date is October 18. Fixture and persisted browser checks passed.
-- Open New chat, ask “What changed in my performance?”, inspect tool results/evidence. Earnings are estimated revenue and recommendations cannot mutate configuration. Text is provisional until evidence validation completes.
+- Open New chat, ask “What changed in my performance?”, inspect tool results/evidence. Earnings are estimated revenue; proposals require human **Update draft**, followed by separate **Publish**, before stored configuration changes. Text is provisional until evidence validation completes.
 - Stop is terminal. Refresh reads persisted state without starting model work. Disconnect/restart interruptions can be explicitly resumed after their lease expires (up to 115 seconds after a crash). Resume reauthorizes ownership, reuses saved tool boundaries and cannot guarantee exactly-once execution of an unfinished read-only node. Cancel an interrupted turn before sending a different question in that conversation.
-- Initial limits: six model attempts, twelve tool attempts, three resumes per turn; 16 KiB arguments, 32 KiB results, 128 KiB model context, 64 KiB visible output, 256 KiB saved state. `AGENT_DEADLINE_MS` defaults to 110000 (maximum), `AGENT_MAX_COMPLETION_TOKENS` to 4096 (maximum 8192), independent of probe budgets. Context retains bounded recent completed turns; older saved messages remain viewable.
+- Limits: six specialist LLM calls including the final answer, up to three decision-gate stages (entry and handoffs), and nine cumulative model attempts including failed/replayed requests; twelve tool attempts and three resumes per turn; 16 KiB arguments, 32 KiB results, 128 KiB model context, 64 KiB visible output, 256 KiB saved state. `AGENT_DEADLINE_MS` defaults to 110000 (maximum), `AGENT_MAX_COMPLETION_TOKENS` to 4096 (maximum 8192), independent of probe budgets. Context retains bounded recent completed turns; older saved messages remain viewable.
 - Production `.env` is never logged or bundled. This checkout's intentionally public demo-only passwords and verified setup are in [demo accounts](../requirements/phase%201/DEMO-ACCOUNTS.md).
 
 ### Isolated full browser checks

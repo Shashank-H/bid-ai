@@ -6,6 +6,7 @@ import type { ChatCompletionMessageParam } from 'openai/resources/chat/completio
 import type { SavedToolExecution, ToolCall } from '../agent/state.js';
 import { conversations, toolExecutions, turns } from './schema.js';
 import { HttpError, notFound } from '../errors.js';
+import { AGENT_LIMITS } from '../agent/policy.js';
 
 export class ConversationRepository {
   constructor(readonly postgres: Postgres) {}
@@ -412,22 +413,44 @@ export class ConversationRepository {
     conversationId: string,
     turnId: string,
     generation: number,
-    kind: 'model' | 'tool',
+    kind: 'model' | 'specialist' | 'decision' | 'tool',
   ) {
     await this.withFence(identity, conversationId, turnId, generation, async (tx) => {
-      const column = kind === 'model' ? turns.modelAttempts : turns.toolAttempts;
+      const column =
+        kind === 'model' || kind === 'specialist'
+          ? turns.specialistAttempts
+          : kind === 'decision'
+            ? turns.decisionAttempts
+            : turns.toolAttempts;
+      const limit =
+        kind === 'specialist'
+          ? AGENT_LIMITS.specialists - 1
+          : kind === 'model'
+            ? AGENT_LIMITS.specialists
+            : kind === 'decision'
+              ? AGENT_LIMITS.decisions
+              : AGENT_LIMITS.tools;
+      const increments =
+        kind === 'model' || kind === 'specialist'
+          ? {
+              modelAttempts: sql`${turns.modelAttempts} + 1`,
+              specialistAttempts: sql`${column} + 1`,
+            }
+          : kind === 'decision'
+            ? {
+                modelAttempts: sql`${turns.modelAttempts} + 1`,
+                decisionAttempts: sql`${column} + 1`,
+              }
+            : { toolAttempts: sql`${column} + 1` };
       const [updated] = await tx
         .update(turns)
-        .set(
-          kind === 'model'
-            ? { modelAttempts: sql`${column} + 1` }
-            : { toolAttempts: sql`${column} + 1` },
-        )
+        .set(increments)
         .where(
           and(
             eq(turns.id, turnId),
             eq(turns.conversationId, conversationId),
-            lt(column, kind === 'model' ? 6 : 12),
+            lt(column, limit),
+            ...(kind === 'tool' ? [] : [lt(turns.modelAttempts, AGENT_LIMITS.models)]),
           ),
         )
         .returning({ id: turns.id });

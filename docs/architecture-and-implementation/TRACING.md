@@ -17,7 +17,7 @@ LANGFUSE_TRACING_ENVIRONMENT=development
 LANGFUSE_TIMEOUT_MS=2000
 ```
 
-Tracing defaults to **disabled**. Enabled configuration requires a valid URL and both project keys. `LANGFUSE_TIMEOUT_MS` accepts 100–10000 milliseconds and bounds export/shutdown operations; it is separate from the model request deadline. Do not use `VITE_` variables, paste keys into source, or publish interpolated Compose configuration. Model credentials remain separate.
+Tracing defaults to **disabled**. Enabled configuration requires a valid URL and both project keys. `LANGFUSE_TIMEOUT_MS` accepts 100–10000 milliseconds and bounds export/shutdown operations; it is separate from the model request deadline. Do not use `VITE_` variables, paste keys into source, or publish interpolated Compose configuration. Model credentials remain separate. Chat uses backend-only `DECISION_MODEL_*` settings in addition to the existing specialist `LLM_*` settings; see [decision-model setup](LOCAL-DEVELOPMENT.md#internal-graph-and-decision-model). The decision endpoint is the full JEV typed HTTP evaluation URL, not an OpenAI base URL. Foundation startup/health/login do not contact either model; decision credentials are read lazily for chat. The LLM compatibility probe does not exercise JEV.
 
 After configuring the model's base URL, model name, and API key:
 
@@ -62,19 +62,32 @@ model-compatibility-probe                 span: selected checks and result
 └── tool-result-continuation              generation
 ```
 
-Investigation turns use a `publisher-investigation` root with `investigation-model` generations and `investigation-tool` observations. A failed turn is recorded as a failure, not a successful `{ finished: true }` result.
+Investigation turns use a `publisher-investigation` root with these observations:
+
+```text
+publisher-investigation                  turn root
+├── decision-model                       custom generation: entry/handoff gate
+├── specialist-read                      generation: bounded evidence gathering
+├── specialist-configuration             generation: optional settings/proposal work
+├── specialist-response                  generation: public answer, no tools
+└── investigation-tool                   tool: actual authorized execution
+```
+
+Each actual request/execution creates its own observation; the tree lists names, not a fixed call count. The internal Read, Configuration and Analysis/response roles share the configured `LLM_*` model. `decision-model` records JEV's native typed HTTP call as a custom generation rather than pretending it is OpenAI Chat Completions. Its metadata includes gate stage, permitted/selected route, confidence and latency; resolved model and provider-reported input/output usage are recorded on the generation. Gates run at entry and semantic handoffs, not on every tool result or token.
+
+The total allowance is six specialist calls including the final answer, up to three gate stages and nine cumulative model attempts including failed/replayed requests, with twelve tool attempts. Missing/unavailable decision service or invalid output fails closed without an ungated fallback. A failed turn is recorded as a failure, not a successful `{ finished: true }` result. The user flow remains unchanged: proposal review, human **Update draft**, then separate **Publish**. Private specialist handoffs are not streamed to the user.
 
 Generation observations include the configured model, request messages and parameters, streamed results, and provider-reported usage when available. A forced tool-call turn may validly contain no text; a separate initial request verifies streaming text. The echo tool is not incorrectly nested under an LLM generation. Failures retain sanitized diagnostic context, including failure stage, endpoint/model, HTTP status, provider request ID and error type/code/parameter/message when available. Stream validation failures include the validation paths, finish reason, bounded partial output and last chunk. Streams interrupted by deadlines close their existing generation rather than creating duplicates.
 
-No fake user IDs or sessions are attached. The environment and `feature:model-probe` tag distinguish runs. Token usage is requested with `stream_options.include_usage`; missing provider usage is **not** replaced with estimated counts. The application does not invent prices or report local Llama costs as OpenAI costs. Langfuse may calculate costs independently for models recognized by its own pricing catalog.
+No fake user IDs or sessions are attached. The environment and `feature:model-probe` tag distinguish runs. Specialist token usage is requested with `stream_options.include_usage`; decision generations use JEV's `usage.input_tokens` and `usage.output_tokens`. In either case, missing provider usage is **not** replaced with estimated counts. The application does not invent prices or report local Llama costs as OpenAI costs. Langfuse may calculate costs independently for models recognized by its own pricing catalog.
 
 ## Privacy and lifecycle
 
-- Only server-side instrumentation receives project credentials. Known keys, credential-like fields, authorization values, email addresses and reasoning fields are masked before export.
+- Only server-side instrumentation receives project credentials. Known keys, including `DECISION_MODEL_API_KEY`, credential-like fields, authorization values, email addresses and reasoning fields are masked before export.
 - Export filtering removes raw request headers and exception events. Agent errors include redacted, bounded structured diagnostics rather than only a static error code. SDK debug logging and media uploads are disabled.
 - Agent payloads can contain publisher context and tool evidence. Treat the configured Langfuse project as a destination for sensitive agent data and restrict its access appropriately. Application logs are never exported there.
 - OpenTelemetry initializes before model clients are constructed. Explicit generation observations capture requests, streamed output and failures as the stream is consumed; no OpenAI auto-instrumentation duplicates them.
-- Disabled tracing creates no telemetry traffic. Export failures do not change the probe result. Short-lived CLI commands flush and shut down; server shutdown also cleans up telemetry, with bounded waits.
+- Disabled tracing creates no telemetry traffic. Export failures do not change the probe result or agent graph behavior; decision-provider failures still fail closed independently of telemetry delivery. Short-lived CLI commands flush and shut down; server shutdown also cleans up telemetry, with bounded waits.
 
 ## Verification and live audit
 

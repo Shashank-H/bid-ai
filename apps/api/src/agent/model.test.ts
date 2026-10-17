@@ -19,7 +19,7 @@ function chunk(delta: Record<string, unknown>, finish: string | null = null) {
   };
 }
 
-async function run(chunks: unknown[]) {
+async function run(chunks: unknown[], specialist: 'read' | 'response' = 'response') {
   const wire =
     chunks.map((value) => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n';
   vi.stubGlobal(
@@ -28,7 +28,10 @@ async function run(chunks: unknown[]) {
   );
   const emitted: string[] = [];
   const result = await modelRunner(env, initializeTracing({ enabled: false }))(
-    initialState('turn-test', [{ role: 'user', content: 'What about my revenue?' }]),
+    {
+      ...initialState('turn-test', [{ role: 'user', content: 'What about my revenue?' }]),
+      specialist,
+    },
     new AbortController().signal,
     (text) => emitted.push(text),
   );
@@ -58,18 +61,22 @@ describe('model stream completion', () => {
               },
             ]
           : [];
-      const { result, emitted } = await run([
-        chunk({ content: 'Public answer', tool_calls: calls }),
-        chunk({}, finish),
-        {
-          ...chunk({ content: '', role: 'assistant' }, finish),
-          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
-        },
-        { choices: [], usage: { total_tokens: 15 } },
-      ]);
+      const content = calls.length ? 'Private planning text' : 'Public answer';
+      const { result, emitted } = await run(
+        [
+          chunk({ content, tool_calls: calls }),
+          chunk({}, finish),
+          {
+            ...chunk({ content: '', role: 'assistant' }, finish),
+            usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+          },
+          { choices: [], usage: { total_tokens: 15 } },
+        ],
+        calls.length ? 'read' : 'response',
+      );
 
-      expect(result.text).toBe('Public answer');
-      expect(emitted.join('')).toBe('Public answer');
+      expect(result.text).toBe(content);
+      expect(emitted.join('')).toBe(calls.length ? '' : content);
       expect(result.calls).toHaveLength(calls.length);
       if (calls.length)
         expect(result.calls[0]).toEqual({
@@ -90,7 +97,10 @@ describe('model stream completion', () => {
     );
     vi.stubGlobal('fetch', fetcher);
     await modelRunner({ ...env, LLM_BASE_URL: baseURL }, initializeTracing({ enabled: false }))(
-      initialState('turn-test', [{ role: 'user', content: 'Hello' }]),
+      {
+        ...initialState('turn-test', [{ role: 'user', content: 'Hello' }]),
+        specialist: 'response',
+      },
       new AbortController().signal,
       () => {},
     );

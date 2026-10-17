@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { allowedToolNames } from '../agent/policy.js';
+import type { SpecialistRole } from '../agent/policy.js';
 import { PeriodInputSchema, ToolResultSchema } from '@bid/shared';
 import type { ToolResult } from '@bid/shared';
 import { Analytics } from '../domain/analytics.js';
@@ -87,6 +89,12 @@ export function toolsForModel(tools: readonly ReadOnlyTool[]) {
       parameters: z.toJSONSchema(tool.inputSchema, { target: 'draft-7' }),
     },
   }));
+}
+
+export function toolsForSpecialist(tools: ReturnType<typeof toolsForModel>, role: SpecialistRole) {
+  const allowed = allowedToolNames(role);
+
+  return tools.filter((tool) => allowed.includes(tool.function.name));
 }
 
 export const modelTools = toolsForModel(readOnlyTools);

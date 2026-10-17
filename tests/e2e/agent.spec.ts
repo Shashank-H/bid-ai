@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { BrowserContext, Page } from '@playwright/test';
 import type { SavedTurn } from '../../packages/shared/src/index.js';
 
 test.skip(
@@ -12,12 +12,20 @@ async function openAgent(page: Page) {
   await expect(page.getByLabel('Message Bid Intelligence')).toBeVisible();
 }
 
+// Reuse test-owned sessions across fresh browser contexts, respecting the real login rate limit.
+const sessions = new Map<string, Awaited<ReturnType<BrowserContext['cookies']>>>();
+
 async function login(page: Page, letter = 'a') {
+  const cookies = sessions.get(letter);
+  if (cookies) await page.context().addCookies(cookies);
   await page.goto('/');
-  await page.getByLabel('Login', { exact: true }).fill(`demo.${letter}`);
-  await page.getByLabel('Password', { exact: true }).fill(`isolated-browser-password-${letter}`);
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  if (!cookies) {
+    await page.getByLabel('Login', { exact: true }).fill(`demo.${letter}`);
+    await page.getByLabel('Password', { exact: true }).fill(`isolated-browser-password-${letter}`);
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  }
   await expect(page.getByLabel('Applied dashboard filters')).toBeVisible();
+  if (!cookies) sessions.set(letter, await page.context().cookies());
   await expect(page.getByLabel('Message Bid Intelligence')).toHaveCount(0);
   await openAgent(page);
 }
@@ -59,6 +67,47 @@ async function restoreConversation(page: Page, id: string) {
 async function send(page: Page, question: string) {
   await page.getByLabel('Message Bid Intelligence').fill(question);
   await page.getByRole('button', { name: 'Send', exact: true }).click();
+}
+
+async function modelStats(page: Page) {
+  const response = await page.request.get('/api/test/model-stats');
+  expect(response.ok()).toBe(true);
+
+  return (await response.json()) as { requests: number; decisionRequests: number };
+}
+
+async function sendWithStream(page: Page, question: string) {
+  // Capture the real server body before the new-conversation hash navigation can evict it.
+  // Buffer only these short gate scenarios; the streaming/cancellation cases are not intercepted.
+  const streamed = Promise.withResolvers<string>();
+  await page.route(
+    '**/api/conversations/*/turns',
+    async (route) => {
+      try {
+        const response = await route.fetch();
+        const body = await response.text();
+        await route.fulfill({ response, body });
+        streamed.resolve(body);
+      } catch (error) {
+        streamed.reject(error);
+      }
+    },
+    { times: 1 },
+  );
+  await send(page, question);
+
+  return streamed.promise;
+}
+
+async function lastSavedTurn(page: Page) {
+  const id = conversationId(page);
+  expect(id).toBeTruthy();
+  const response = await page.request.get(`/api/conversations/${id}`);
+  expect(response.ok()).toBe(true);
+  const turn = ((await response.json()) as { turns: SavedTurn[] }).turns.at(-1);
+  expect(turn).toBeDefined();
+
+  return turn!;
 }
 
 test('opening the agent and repeated New chat remain unsaved drafts; history restores only explicitly', async ({
@@ -197,10 +246,15 @@ test('Stop cancels upstream work and persists cancellation; untrusted citations 
   page,
 }) => {
   await login(page);
+  const before = await modelStats(page);
   await send(page, 'mock:slow');
-  await expect(page.locator('.assistant-message .message-text')).toContainText(
-    'Waiting for the demo investigation',
-  );
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  await expect.poll(async () => (await modelStats(page)).requests).toBeGreaterThan(before.requests);
+  await expect(
+    page
+      .locator('.assistant-message .message-text')
+      .filter({ hasText: 'Waiting for the demo investigation' }),
+  ).toHaveCount(0);
   const id = conversationId(page);
   await page.getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(page.locator('.turn-status')).toContainText('cancelled · incomplete response');
@@ -219,10 +273,15 @@ test('closing the agent detaches streaming but backend work completes in its ori
   test.setTimeout(60_000);
   await login(page);
   const filters = (await page.getByLabel('Applied dashboard filters').textContent())!;
+  const before = await modelStats(page);
   await send(page, 'mock:slow complete after closing panel');
-  await expect(page.locator('.assistant-message .message-text')).toContainText(
-    'Waiting for the demo investigation',
-  );
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  await expect.poll(async () => (await modelStats(page)).requests).toBeGreaterThan(before.requests);
+  await expect(
+    page
+      .locator('.assistant-message .message-text')
+      .filter({ hasText: 'Waiting for the demo investigation' }),
+  ).toHaveCount(0);
   const id = conversationId(page);
   await page.getByRole('button', { name: 'Close agent panel', exact: true }).click();
   await openAgent(page);
@@ -245,9 +304,12 @@ test('streaming tool updates do not pull a reader away from earlier messages', a
     page,
     `mock:slow\n${'Please investigate auction performance with supporting evidence.\n'.repeat(70)}`,
   );
-  await expect(page.locator('.assistant-message .message-text')).toContainText(
-    'Waiting for the demo investigation',
-  );
+  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator('.assistant-message .message-text')
+      .filter({ hasText: 'Waiting for the demo investigation' }),
+  ).toHaveCount(0);
   const scroll = page.locator('.chat-scroll');
   expect(await scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
     true,
@@ -344,6 +406,105 @@ test('bidder filters apply explicitly and pagination exposes every matching dail
   await expect(page.locator('.matching-records tbody tr td:nth-child(2)')).toHaveText(
     Array(14).fill('atlas'),
   );
+});
+
+for (const scenario of [
+  {
+    question: 'mock:out-of-scope',
+    answer:
+      'I can help investigate publisher auction performance and assist with publisher configurations. Please ask a question within that scope.',
+  },
+  {
+    question: 'mock:decision-uncertain',
+    answer:
+      'Would you like me to investigate publisher performance or help with a particular configuration setting or change?',
+  },
+]) {
+  test(`${scenario.question} returns a fixed response without specialists or tools`, async ({
+    page,
+  }) => {
+    await login(page);
+    const before = await modelStats(page);
+    const stream = await sendWithStream(page, scenario.question);
+    await expectCompleted(page);
+    await expect(page.locator('.assistant-message .message-text')).toHaveText(scenario.answer);
+    const saved = await lastSavedTurn(page);
+    expect(saved.text).toBe(scenario.answer);
+    expect(saved.tools).toHaveLength(0);
+    expect(saved.errorCode).toBeNull();
+    await expect(page.locator('.tool-diagnostics')).toHaveCount(0);
+    await expect(page.locator('.evidence-card')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Configuration draft proposal' })).toHaveCount(0);
+    expect(stream).not.toMatch(/"type"\s*:\s*"tool-start"/);
+    expect(await modelStats(page)).toEqual({
+      requests: before.requests,
+      decisionRequests: before.decisionRequests + 1,
+    });
+  });
+}
+
+for (const failure of ['invalid', 'auth', 'rate-limit', 'failure', 'timeout']) {
+  test(`decision-model ${failure} stops safely without a specialist fallback`, async ({ page }) => {
+    await login(page);
+    const before = await modelStats(page);
+    const stream = await sendWithStream(page, `mock:decision-${failure}`);
+    const saved = await lastSavedTurn(page);
+    expect(['error', 'interrupted']).toContain(saved.status);
+    expect(saved.errorCode).toBe('DEPENDENCY_UNAVAILABLE');
+    expect(saved.text).toBe('');
+    expect(saved.tools).toHaveLength(0);
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'The decision model is unavailable' }),
+    ).toBeVisible();
+    await expect(page.locator('.tool-diagnostics')).toHaveCount(0);
+    await expect(page.locator('.evidence-card')).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Configuration draft proposal' })).toHaveCount(0);
+    expect(stream).not.toMatch(/"type"\s*:\s*"tool-start"/);
+    expect(stream).not.toMatch(/PRIVATE_|BROWSER_(?:MODEL|DECISION)_KEY_SENTINEL/);
+    expect(await modelStats(page)).toEqual({
+      requests: before.requests,
+      decisionRequests: before.decisionRequests + 1,
+    });
+  });
+}
+
+test('Read cannot start a configuration proposal outside its tool allowlist', async ({ page }) => {
+  await login(page);
+  const before = await modelStats(page);
+  const stream = await sendWithStream(page, 'mock:cross-role');
+  const saved = await lastSavedTurn(page);
+  expect(saved.status).toBe('error');
+  expect(saved.errorCode).toBe('CONFLICT');
+  expect(saved.text).toBe('');
+  expect(saved.tools).toHaveLength(0);
+  await expect(page.locator('.tool-diagnostics')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Configuration draft proposal' })).toHaveCount(0);
+  expect(stream).not.toMatch(/"type"\s*:\s*"tool-start"/);
+  expect(await modelStats(page)).toEqual({
+    requests: before.requests + 1,
+    decisionRequests: before.decisionRequests + 1,
+  });
+});
+
+test('handoff gate failure keeps private planner output out of the stream and history', async ({
+  page,
+}) => {
+  await login(page);
+  const before = await modelStats(page);
+  const stream = await sendWithStream(page, 'mock:decision-after-read-failure');
+  const saved = await lastSavedTurn(page);
+  expect(['error', 'interrupted']).toContain(saved.status);
+  expect(saved.errorCode).toBe('DEPENDENCY_UNAVAILABLE');
+  expect(saved.tools.length).toBeGreaterThan(0);
+  expect(saved.text).toBe('');
+  await expect(page.locator('.tool-diagnostics')).toHaveCount(saved.tools.length);
+  await expect(page.getByRole('region', { name: 'Configuration draft proposal' })).toHaveCount(0);
+  expect(stream).not.toMatch(/PRIVATE_|BROWSER_(?:MODEL|DECISION)_KEY_SENTINEL/);
+  expect(JSON.stringify(saved)).not.toContain('PRIVATE_HANDOFF_SENTINEL');
+  expect(await page.content()).not.toContain('PRIVATE_HANDOFF_SENTINEL');
+  const after = await modelStats(page);
+  expect(after.requests).toBeGreaterThan(before.requests);
+  expect(after.decisionRequests).toBe(before.decisionRequests + 2);
 });
 
 test('dark theme persists across dashboard reload and agent open/close', async ({

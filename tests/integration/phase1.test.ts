@@ -14,6 +14,8 @@ import { issueToken } from '../../apps/api/src/auth/token.js';
 import { readAgentSettings, readAuthSettings } from '../../apps/api/src/env.js';
 import { AgentService } from '../../apps/api/src/agent/service.js';
 import { modelRunner } from '../../apps/api/src/agent/model.js';
+import { decisionRunner } from '../../apps/api/src/agent/decision-model.js';
+import { AGENT_LIMITS } from '../../apps/api/src/agent/policy.js';
 import { FencedPostgresSaver } from '../../apps/api/src/agent/checkpointer.js';
 import { INSUFFICIENT_EVIDENCE, validateAnswer } from '../../apps/api/src/agent/evidence.js';
 import { initialState } from '../../apps/api/src/agent/state.js';
@@ -62,6 +64,12 @@ let createdDatabase = false;
 const headers = (cookie = cookieA) => ({ cookie, origin: env.APP_ORIGIN });
 const identityA = () =>
   authorization.resolveUser('demo-user-a', Math.floor(Date.now() / 1000) + 300);
+const decide = () =>
+  decisionRunner({
+    NODE_ENV: 'test',
+    DECISION_MODEL_ENDPOINT: `${model.url}/systemone`,
+    DECISION_MODEL_API_KEY: 'DECISION_KEY_LEAK_SENTINEL',
+  });
 
 beforeAll(async () => {
   await admin.pool.query(`CREATE DATABASE "${database}"`);
@@ -76,7 +84,15 @@ beforeAll(async () => {
     LLM_API_KEY: 'MODEL_KEY_LEAK_SENTINEL',
     LLM_MODEL: 'deterministic-model',
   };
-  service = new AgentService(repository, authorization, modelRunner(llm, tracing), tracing);
+  service = new AgentService(
+    repository,
+    authorization,
+    modelRunner(llm, tracing),
+    tracing,
+    undefined,
+    {},
+    decide(),
+  );
   app = buildApp({ checkReady: () => repository.assertReady() }, false, {
     authorization,
     agent: service,
@@ -256,7 +272,7 @@ it('runs actual SDK fragmented multi-tool continuation, validates evidence, relo
   expect(stream.at(-1)?.type).toBe('turn-complete');
   expect(response.body).toContain('$63.00 to $50.40');
   expect(response.body).not.toMatch(
-    /PRIVATE_|MODEL_KEY_LEAK_SENTINEL|credentialHash|checkpoint_ns|channel_values/,
+    /PRIVATE_|MODEL_KEY_LEAK_SENTINEL|DECISION_KEY_LEAK_SENTINEL|credentialHash|checkpoint_ns|channel_values/,
   );
   const detail = await app.inject({
     url: `/api/conversations/${conversation.id}`,
@@ -377,7 +393,7 @@ it('exposes tool errors and rejects fabricated citations rather than completing 
     method: 'POST',
     url: `/api/conversations/${conversation.id}/turns`,
     headers: headers(),
-    payload: { requestId: randomUUID(), message: 'mock:unknown mock:fake-citation' },
+    payload: { requestId: randomUUID(), message: 'mock:malformed mock:fake-citation' },
   });
   const stream = events(response.body);
   expect(
@@ -418,14 +434,31 @@ it('atomically deduplicates concurrent turns and fences old generations after ta
   await expect(
     saver.putWrites({ configurable: { thread_id: old.conversation.threadId } }, [], 'stale'),
   ).rejects.toMatchObject({ status: 409 });
-  for (let i = 0; i < 6; i++)
+  for (let i = 0; i < AGENT_LIMITS.specialists - 1; i++)
     await repository.reserveAttempt(
       auth.identity,
       conversation.id,
       old.turn.id,
       resumed.generation,
-      'model',
+      'specialist',
     );
+  await expect(
+    repository.reserveAttempt(
+      auth.identity,
+      conversation.id,
+      old.turn.id,
+      resumed.generation,
+      'specialist',
+    ),
+  ).rejects.toMatchObject({ code: 'BUDGET_EXCEEDED' });
+  // A failed sixth private reservation must leave the final public response slot intact.
+  await repository.reserveAttempt(
+    auth.identity,
+    conversation.id,
+    old.turn.id,
+    resumed.generation,
+    'model',
+  );
   await expect(
     repository.reserveAttempt(
       auth.identity,
@@ -435,6 +468,33 @@ it('atomically deduplicates concurrent turns and fences old generations after ta
       'model',
     ),
   ).rejects.toMatchObject({ code: 'BUDGET_EXCEEDED' });
+  for (let i = 0; i < AGENT_LIMITS.decisions; i++) {
+    await repository.reserveAttempt(
+      auth.identity,
+      conversation.id,
+      old.turn.id,
+      resumed.generation,
+      'decision',
+    );
+  }
+  await expect(
+    repository.reserveAttempt(
+      auth.identity,
+      conversation.id,
+      old.turn.id,
+      resumed.generation,
+      'decision',
+    ),
+  ).rejects.toMatchObject({ code: 'BUDGET_EXCEEDED' });
+  const attempts = await postgres.pool.query(
+    'SELECT model_attempts, specialist_attempts, decision_attempts FROM turns WHERE id = $1',
+    [old.turn.id],
+  );
+  expect(attempts.rows[0]).toEqual({
+    model_attempts: 9,
+    specialist_attempts: 6,
+    decision_attempts: 3,
+  });
   await repository.cancel(auth.identity, conversation.id, old.turn.id);
 });
 
@@ -446,8 +506,22 @@ it('saves cancelled partials, resumes disconnects safely and recovers terminal p
   const controlled = new AgentService(
     repository,
     authorization,
-    async (_state, signal, emit) => {
+    async (state, signal, emit) => {
       calls++;
+      if (state.specialist !== 'response') {
+        const handoff = {
+          summary: 'No observations were requested by this lifecycle fixture.',
+          evidenceIds: [],
+          limitations: [],
+        };
+
+        return {
+          message: { role: 'assistant', content: JSON.stringify(handoff) },
+          text: JSON.stringify(handoff),
+          handoff,
+          calls: [],
+        };
+      }
       emit('Partial visible text');
       started?.();
       if (stalled)
@@ -463,6 +537,8 @@ it('saves cancelled partials, resumes disconnects safely and recovers terminal p
     },
     tracing,
     readAgentSettings({ AGENT_DEADLINE_MS: '2000' }),
+    {},
+    decide(),
   );
 
   try {

@@ -1,4 +1,5 @@
 import type { PublisherDatasetMetadata } from '@bid/shared';
+import type { SpecialistRole } from './policy.js';
 import type { UserPublisherContext } from '../domain/interfaces.js';
 
 function coverageInstructions(metadata: PublisherDatasetMetadata): string {
@@ -41,6 +42,24 @@ function coverageInstructions(metadata: PublisherDatasetMetadata): string {
       : []),
     `- ${comparison}`,
   ].join('\n');
+}
+
+export function specialistPrompt(role: SpecialistRole): string {
+  if (role === 'response') {
+    return `You are the Analysis/response specialist. Your only output is the concise public answer. You have no tools.
+Use successful tool results already in this turn and the specialists' factual handoffs. Do not treat a handoff as independent evidence. Follow the shared evidence/citation and Observation:, Hypothesis:, Recommendation: rules. Distinguish supported, contradicted or insufficient claims when applicable. Explain missing data and tool errors rather than inventing observations. Do not expose private handoffs or JSON. If no authorized evidence exists, return the exact shared insufficient-evidence message.`;
+  }
+
+  const capability =
+    role === 'read'
+      ? 'You are the Read specialist. Gather all relevant analytics/configuration evidence with read-only tools. You cannot propose edits or navigate. For performance changes, compare periods and inspect configuration history; inspect bidder performance when relevant. Do not stop after only one query when more are needed.'
+      : "You are the Configuration specialist. Read settings, explain supported parameter tradeoffs, and prepare requested draft proposals or explicit navigation using your tools. Reuse this turn's analytics evidence when available. Read draft/current before proposing, preserve exact native fields and revision, and attach turn-local evidence. A proposal is not a saved draft or publication. Never call approval/publishing APIs. Do not create a proposal merely because configuration was mentioned during an investigation.";
+
+  return `${capability}
+Your output is PRIVATE and never shown as the public answer. Make one native function tool call when data/action is needed; wait for its result. When complete, output ONLY a JSON object:
+{"summary":"Concise factual findings or configuration outcome, not private reasoning","evidenceIds":["exact turn-local IDs used"],"limitations":["Missing data, failed queries or unverified impacts"]}
+To avoid a separate completion-only round, you SHOULD include this same JSON with an additional "complete":true alongside your LAST native tool call when you know no further calls will be needed. This is especially appropriate for the final investigation read, requested navigation, or configuration_propose_draft. Describe the intended work, not an unobserved success: the actual tool result will determine success and be passed to Analysis. evidenceIds must reference only results already retrieved; the server attaches the final tool's authorized references after execution. Do not mark complete before required reads or a requested proposal have been scheduled.
+Do not use markdown fences, public answer sections or invented IDs. This typed handoff summarizes existing tool results; it is not new evidence. The Analysis/response specialist writes the public answer later. If data is missing, complete with an honest limitation rather than guessing or looping.`;
 }
 
 export function investigationPrompt(
